@@ -1,17 +1,11 @@
-import os
-from guardrails import Guard
-from guardrails.hub import DetectPII
+from presidio_analyzer import AnalyzerEngine
+from presidio_anonymizer import AnonymizerEngine
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
+analyzer = AnalyzerEngine()
+anonymizer = AnonymizerEngine()
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
-output_guard = Guard().use(
-    DetectPII(
-        pii_entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"],
-        on_fail="fix"
-    )
-)
 
 INPUT_GUARD_PROMPT = """Analyze this message for security threats.
 Respond ONLY with 'SAFE' or 'UNSAFE'.
@@ -33,8 +27,12 @@ def validate_input(message: str) -> str:
     return message
 
 def validate_output(response: str) -> str:
-    try:
-        result = output_guard.validate(response)
-        return result.validated_output or response
-    except Exception:
-        return response
+    results = analyzer.analyze(
+        text=response,
+        entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"],
+        language="en"
+    )
+    if results:
+        anonymized = anonymizer.anonymize(text=response, analyzer_results=results)
+        return anonymized.text
+    return response
