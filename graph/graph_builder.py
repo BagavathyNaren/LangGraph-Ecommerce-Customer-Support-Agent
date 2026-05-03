@@ -1,9 +1,15 @@
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.postgres import PostgresSaver
 from graph.state import AgentState
 from graph.nodes import classify_intent, handle_tool, escalation_check, escalate, respond
 from graph.edges import route_intent, route_escalation
+import os
 
 def build_graph():
+    db_url = os.environ["DATABASE_URL"]
+    checkpointer = PostgresSaver.from_conn_string(db_url)
+    checkpointer.setup()
+
     graph = StateGraph(AgentState)
 
     graph.add_node("classify_intent", classify_intent)
@@ -37,4 +43,4 @@ def build_graph():
     graph.add_edge("escalate", END)
     graph.add_edge("respond", END)
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
