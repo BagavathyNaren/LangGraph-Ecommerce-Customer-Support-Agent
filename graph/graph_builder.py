@@ -3,11 +3,13 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from graph.state import AgentState
 from graph.nodes import classify_intent, handle_tool, escalation_check, escalate, respond
 from graph.edges import route_intent, route_escalation
+import psycopg
 import os
 
 def build_graph():
     db_url = os.environ["DATABASE_URL"]
-    checkpointer = PostgresSaver.from_conn_string(db_url)
+    conn = psycopg.connect(db_url)
+    checkpointer = PostgresSaver(conn)
     checkpointer.setup()
 
     graph = StateGraph(AgentState)
