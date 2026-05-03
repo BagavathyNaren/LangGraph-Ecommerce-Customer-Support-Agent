@@ -8,7 +8,7 @@ import os
 
 def build_graph():
     db_url = os.environ["DATABASE_URL"]
-    conn = psycopg.connect(db_url)
+    conn = psycopg.connect(db_url, autocommit=True)
     checkpointer = PostgresSaver(conn)
     checkpointer.setup()
 
