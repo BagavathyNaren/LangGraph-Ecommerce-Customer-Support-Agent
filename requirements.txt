@@ -5,4 +5,5 @@ langchain-core
 langchain-openai
 python-dotenv
 psycopg2-binary
+psycopg[binary]
 langgraph-checkpoint-postgres
