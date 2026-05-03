@@ -57,26 +57,34 @@ def escalation_check(state: AgentState) -> AgentState:
     anger_count = state.get("anger_count", 0)
     retry_count = state.get("retry_count", 0)
     refund_amount = state.get("refund_amount", 0.0)
+    already_escalated = state.get("escalated", False)
 
-    if any(word in last_message for word in anger_words):
-        anger_count += 1
+    if not already_escalated:
+        if any(word in last_message for word in anger_words):
+            anger_count += 1
+
+        if (
+            anger_count >= 2 or
+            retry_count >= 3 or
+            refund_amount > 5000
+        ):
+            state["escalated"] = True
 
     state["anger_count"] = anger_count
     state["retry_count"] = retry_count
     state["refund_amount"] = refund_amount
-
-    if (
-        anger_count >= 2 or
-        retry_count >= 3 or
-        refund_amount > 5000
-    ):
-        state["escalated"] = True
-
     return state
 
 def escalate(state: AgentState) -> AgentState:
-    result = create_support_ticket(str(state.get("tool_result", "No tool result")))
-    reply = f"I've escalated your case to a human agent. {result['message']} Ticket ID: {result['ticket_id']}"
+    messages = state.get("messages", [])
+    already_escalated = len([m for m in messages if "TKT-" in m.content]) > 0
+
+    if already_escalated:
+        reply = "Your case is already escalated. A human agent will contact you soon. Ticket ID: TKT-9901"
+    else:
+        result = create_support_ticket(str(state.get("tool_result", "")))
+        reply = f"I've escalated your case to a human agent. {result['message']} Ticket ID: {result['ticket_id']}"
+
     state["messages"].append(AIMessage(content=reply))
     return state
 
