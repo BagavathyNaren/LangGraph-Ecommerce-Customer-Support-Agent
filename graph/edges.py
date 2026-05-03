@@ -1,7 +1,7 @@
 from graph.state import AgentState
 
 def route_intent(state: AgentState) -> str:
-    intent = state["intent"]
+    intent = state.get("intent", "unclear")
     valid_intents = [
         "order_status", "return_request", "refund_status",
         "cancel_order", "product_query"
@@ -11,6 +11,6 @@ def route_intent(state: AgentState) -> str:
     return "respond"
 
 def route_escalation(state: AgentState) -> str:
-    if state["escalated"]:
+    if state.get("escalated", False):
         return "escalate"
     return "respond"
