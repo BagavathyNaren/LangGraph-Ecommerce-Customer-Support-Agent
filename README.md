@@ -1,11 +1,10 @@
 ---
 title: Ecommerce Support Agent
-emoji: 🦀
-colorFrom: red
-colorTo: red
+emoji: 🛒
+colorFrom: blue
+colorTo: green
 sdk: docker
 pinned: false
-short_description: This is the e-commerce customer support agent
+build_args:
+  - GUARDRAILS_AI_API_KEY
 ---
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
