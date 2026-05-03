@@ -6,17 +6,21 @@ from graph.edges import route_intent, route_escalation
 from psycopg_pool import ConnectionPool
 import os
 
-def build_graph():
+def make_pool():
     db_url = os.environ["DATABASE_URL"]
-    pool = ConnectionPool(
-    db_url,
-    min_size=1,
-    max_size=5,
-    open=True,
-    reconnect_timeout=30,
-    kwargs={"autocommit": True, "connect_timeout": 10}
+    return ConnectionPool(
+        db_url,
+        min_size=1,
+        max_size=5,
+        open=True,
+        max_idle=300,
+        reconnect_timeout=30,
+        kwargs={"autocommit": True, "connect_timeout": 10}
     )
-    
+
+pool = make_pool()
+
+def build_graph():
     checkpointer = PostgresSaver(pool)
     checkpointer.setup()
 
