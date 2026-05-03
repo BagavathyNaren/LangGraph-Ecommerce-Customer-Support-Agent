@@ -11,11 +11,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 ARG GUARDRAILS_AI_API_KEY
-RUN echo "enable_metrics=false" > ~/.guardrailsrc && \
-    echo "enable_remote_inferencing=false" >> ~/.guardrailsrc && \
-    echo "token=${GUARDRAILS_AI_API_KEY}" >> ~/.guardrailsrc && \
-    guardrails hub install hub://guardrails/toxic_language --quiet && \
-    guardrails hub install hub://guardrails/detect_jailbreak --quiet
+RUN guardrails hub install hub://guardrails/toxic_language \
+    --token="${GUARDRAILS_AI_API_KEY}" --quiet && \
+    guardrails hub install hub://guardrails/detect_jailbreak \
+    --token="${GUARDRAILS_AI_API_KEY}" --quiet
 
 COPY . .
 
