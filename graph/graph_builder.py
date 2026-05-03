@@ -8,7 +8,15 @@ import os
 
 def build_graph():
     db_url = os.environ["DATABASE_URL"]
-    pool = ConnectionPool(db_url, min_size=1, max_size=5, open=True)
+    pool = ConnectionPool(
+    db_url,
+    min_size=1,
+    max_size=5,
+    open=True,
+    reconnect_timeout=30,
+    kwargs={"autocommit": True, "connect_timeout": 10}
+    )
+    
     checkpointer = PostgresSaver(pool)
     checkpointer.setup()
 
