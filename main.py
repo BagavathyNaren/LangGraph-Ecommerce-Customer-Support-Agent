@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator, Field
 from langchain_core.messages import HumanMessage
 from graph.graph_builder import build_graph
-from guardrails.guards import validate_input, validate_output
+from security.guards import validate_input, validate_output
 import re
 import os
 
