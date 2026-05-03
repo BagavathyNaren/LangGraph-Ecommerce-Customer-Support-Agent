@@ -10,9 +10,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install GuardrailsAI validators
-RUN guardrails hub install hub://guardrails/toxic_language --quiet
-RUN guardrails hub install hub://guardrails/detect_jailbreak --quiet
+# Install GuardrailsAI validators using API key
+ARG GUARDRAILS_API_KEY
+RUN guardrails configure --token $GUARDRAILS_AI_API_KEY --enable-metrics false --enable-remote-inferencing false && \
+    guardrails hub install hub://guardrails/toxic_language --quiet && \
+    guardrails hub install hub://guardrails/detect_jailbreak --quiet
 
 COPY . .
 
