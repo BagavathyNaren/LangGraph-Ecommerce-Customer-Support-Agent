@@ -10,7 +10,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-ARG GUARDRAILS_API_KEY
+ARG GUARDRAILS_AI_API_KEY
 RUN echo "enable_metrics=false" > ~/.guardrailsrc && \
     echo "enable_remote_inferencing=false" >> ~/.guardrailsrc && \
     echo "token=${GUARDRAILS_AI_API_KEY}" >> ~/.guardrailsrc && \
