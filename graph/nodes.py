@@ -75,14 +75,14 @@ def escalation_check(state: AgentState) -> AgentState:
     return state
 
 def escalate(state: AgentState) -> AgentState:
-    result = create_support_ticket(str(state["tool_result"]))
+    result = create_support_ticket(str(state.get("tool_result", "No tool result")))
     reply = f"I've escalated your case to a human agent. {result['message']} Ticket ID: {result['ticket_id']}"
     state["messages"].append(AIMessage(content=reply))
     return state
 
 def respond(state: AgentState) -> AgentState:
     prompt = f"""You are a helpful e-commerce support agent.
-Tool result: {state['tool_result']}
+Tool result: {state.get('tool_result', 'No previous tool result')}
 Respond naturally to the customer in 2-3 sentences."""
 
     response = llm.invoke([HumanMessage(content=prompt)])
