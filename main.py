@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator, Field
 from langchain_core.messages import HumanMessage
 from graph.graph_builder import build_graph
+from guardrails.guards import validate_input, validate_output
 import re
 import os
 
@@ -13,11 +14,11 @@ graph = build_graph()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 BANNED_PATTERNS = [
-    r"<script.*?>", r"javascript:", r"\.\./",   # XSS + path traversal
-    r"lc_kwargs", r"lc_serializable",           # CVE-2025-68664 deserialization
-    r"(?i)(drop|delete|truncate)\s+table",      # SQL injection
-    r"(?i)ignore\s+previous\s+instructions",    # prompt injection
-    r"(?i)you\s+are\s+now\s+a",                # role hijacking
+    r"<script.*?>", r"javascript:", r"\.\./",
+    r"lc_kwargs", r"lc_serializable",
+    r"(?i)(drop|delete|truncate)\s+table",
+    r"(?i)ignore\s+previous\s+instructions",
+    r"(?i)you\s+are\s+now\s+a",
 ]
 
 class ChatRequest(BaseModel):
@@ -50,14 +51,21 @@ def health():
 @app.post("/chat")
 def chat(request: ChatRequest):
     try:
+        # Layer 1 — GuardrailsAI input validation
+        validated_message = validate_input(request.message)
+
         config = {"configurable": {"thread_id": request.thread_id}}
         result = graph.invoke(
-            {"messages": [HumanMessage(content=request.message)]},
+            {"messages": [HumanMessage(content=validated_message)]},
             config=config
         )
-        last_message = result["messages"][-1].content
+        raw_response = result["messages"][-1].content
+
+        # Layer 2 — GuardrailsAI output validation
+        safe_response = validate_output(raw_response)
+
         return {
-            "response": last_message,
+            "response": safe_response,
             "intent": result.get("intent"),
             "escalated": result.get("escalated", False),
             "order_id": result.get("order_id")
