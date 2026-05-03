@@ -6,4 +6,5 @@ langchain-openai
 python-dotenv
 psycopg2-binary
 psycopg[binary]
+psycopg-pool
 langgraph-checkpoint-postgres
