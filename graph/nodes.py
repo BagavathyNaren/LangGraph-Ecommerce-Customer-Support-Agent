@@ -45,7 +45,7 @@ def handle_tool(state: AgentState) -> AgentState:
         result = search_knowledge_base(last_message)
     else:
         result = {"answer": "I could not understand your request."}
-        state["retry_count"] += 1
+        state["retry_count"] = state.get("retry_count", 0) + 1
 
     state["tool_result"] = str(result)
     return state
@@ -54,13 +54,21 @@ def escalation_check(state: AgentState) -> AgentState:
     last_message = state["messages"][-1].content.lower()
     anger_words = ["angry", "furious", "terrible", "worst", "useless", "refund now", "escalate"]
 
+    anger_count = state.get("anger_count", 0)
+    retry_count = state.get("retry_count", 0)
+    refund_amount = state.get("refund_amount", 0.0)
+
     if any(word in last_message for word in anger_words):
-        state["anger_count"] += 1
+        anger_count += 1
+
+    state["anger_count"] = anger_count
+    state["retry_count"] = retry_count
+    state["refund_amount"] = refund_amount
 
     if (
-        state["anger_count"] >= 2 or
-        state["retry_count"] >= 3 or
-        state["refund_amount"] > 5000
+        anger_count >= 2 or
+        retry_count >= 3 or
+        refund_amount > 5000
     ):
         state["escalated"] = True
 
