@@ -8,14 +8,15 @@ import os
 
 def make_pool():
     db_url = os.environ["DATABASE_URL"]
-    return ConnectionPool(
-        db_url,
-        min_size=1,
-        max_size=5,
-        open=True,
-        max_idle=300,
-        reconnect_timeout=30,
-        kwargs={"autocommit": True, "connect_timeout": 10}
+
+    pool = ConnectionPool(
+    db_url,
+    min_size=1,
+    max_size=5,
+    open=True,
+    max_idle=180,
+    reconnect_timeout=30,
+    kwargs={"autocommit": True, "connect_timeout": 10}
     )
 
 pool = make_pool()
