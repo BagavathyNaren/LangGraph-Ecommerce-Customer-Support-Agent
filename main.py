@@ -10,6 +10,7 @@ from logger import get_logger
 import re
 import os
 import time
+from evaluation.evaluator import run_evaluation
 
 os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
@@ -124,3 +125,15 @@ def chat(request: ChatRequest):
             "error": str(e)
         })
         raise HTTPException(status_code=500, detail="Internal agent error.")
+
+@app.post("/evaluate")
+def evaluate():
+    if graph is None:
+        raise HTTPException(status_code=503, detail="Agent not ready.")
+    try:
+        logger.info("Evaluation started", extra={"event": "eval_start"})
+        results = run_evaluation(graph)
+        return results
+    except Exception as e:
+        logger.error("Evaluation failed", extra={"event": "eval_error", "error": str(e)})
+        raise HTTPException(status_code=500, detail="Evaluation failed.")
