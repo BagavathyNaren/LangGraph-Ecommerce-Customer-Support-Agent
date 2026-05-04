@@ -18,6 +18,17 @@ Mark UNSAFE if it contains:
 Message: {message}"""
 
 def validate_input(message: str) -> str:
+    # First redact PII from input before LLM sees it
+    results = analyzer.analyze(
+        text=message,
+        entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"],
+        language="en"
+    )
+    if results:
+        anonymized = anonymizer.anonymize(text=message, analyzer_results=results)
+        message = anonymized.text
+
+    # Then check for jailbreak
     result = llm.invoke([
         SystemMessage(content="You are a security classifier. Respond only SAFE or UNSAFE."),
         HumanMessage(content=INPUT_GUARD_PROMPT.format(message=message))
