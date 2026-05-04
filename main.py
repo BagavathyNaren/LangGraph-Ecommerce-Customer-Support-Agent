@@ -62,7 +62,7 @@ def health():
 @app.post("/chat")
 def chat(request: ChatRequest):
     try:
-        validated_message = validate_input(request.message)
+        validated_message, pii_detected = validate_input(request.message)
         config = {"configurable": {"thread_id": request.thread_id}}
         result = graph.invoke(
             {"messages": [HumanMessage(content=validated_message)]},
@@ -74,7 +74,8 @@ def chat(request: ChatRequest):
             "response": safe_response,
             "intent": result.get("intent"),
             "escalated": result.get("escalated", False),
-            "order_id": result.get("order_id")
+            "order_id": result.get("order_id"),
+            "pii_detected": pii_detected
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
