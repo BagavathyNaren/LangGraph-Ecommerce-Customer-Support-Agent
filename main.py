@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator, Field
 from langchain_core.messages import HumanMessage
 from graph.graph_builder import build_graph
 from security.guards import validate_input, validate_output
+from contextlib import asynccontextmanager
 import re
 import os
 # LangSmith tracing
@@ -12,7 +13,16 @@ os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "fal
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"] = os.environ.get("LANGCHAIN_PROJECT", "ecommerce-support-agent")
 
-app = FastAPI()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from graph.graph_builder import pool
+    pool.check()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
 graph = build_graph()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
