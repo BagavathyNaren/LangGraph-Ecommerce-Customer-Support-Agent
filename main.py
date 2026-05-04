@@ -7,6 +7,10 @@ from graph.graph_builder import build_graph
 from security.guards import validate_input, validate_output
 import re
 import os
+# LangSmith tracing
+os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
+os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
+os.environ["LANGCHAIN_PROJECT"] = os.environ.get("LANGCHAIN_PROJECT", "ecommerce-support-agent")
 
 app = FastAPI()
 graph = build_graph()
