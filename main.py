@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -5,27 +6,12 @@ from pydantic import BaseModel, field_validator, Field
 from langchain_core.messages import HumanMessage
 from graph.graph_builder import build_graph
 from security.guards import validate_input, validate_output
-from contextlib import asynccontextmanager
 import re
 import os
-# LangSmith tracing
+
 os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"] = os.environ.get("LANGCHAIN_PROJECT", "ecommerce-support-agent")
-
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    from graph.graph_builder import pool
-    pool.check()
-    yield
-
-app = FastAPI(lifespan=lifespan)
-
-graph = build_graph()
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 BANNED_PATTERNS = [
     r"<script.*?>", r"javascript:", r"\.\./",
@@ -34,6 +20,17 @@ BANNED_PATTERNS = [
     r"(?i)ignore\s+previous\s+instructions",
     r"(?i)you\s+are\s+now\s+a",
 ]
+
+graph = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global graph
+    graph = build_graph()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=1000)
@@ -65,19 +62,14 @@ def health():
 @app.post("/chat")
 def chat(request: ChatRequest):
     try:
-        # Layer 1 — GuardrailsAI input validation
         validated_message = validate_input(request.message)
-
         config = {"configurable": {"thread_id": request.thread_id}}
         result = graph.invoke(
             {"messages": [HumanMessage(content=validated_message)]},
             config=config
         )
         raw_response = result["messages"][-1].content
-
-        # Layer 2 — GuardrailsAI output validation
         safe_response = validate_output(raw_response)
-
         return {
             "response": safe_response,
             "intent": result.get("intent"),
