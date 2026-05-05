@@ -10,10 +10,10 @@ def build_graph():
     db_url = os.environ["DATABASE_URL"]
     pool = ConnectionPool(
         db_url,
-        min_size=1,
+        min_size=0,
         max_size=5,
         open=True,
-        max_idle=180,
+        max_idle=60,
         reconnect_timeout=30,
         kwargs={"autocommit": True, "connect_timeout": 10}
     )
