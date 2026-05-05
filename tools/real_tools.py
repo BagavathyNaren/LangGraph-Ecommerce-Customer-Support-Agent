@@ -9,10 +9,9 @@ def get_order_status(order_id: str) -> dict:
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT o.order_id, o.status, o.item, o.expected_delivery, c.name
-                    FROM orders o
-                    JOIN customers c ON o.customer_id = c.customer_id
-                    WHERE o.order_id = %s
+                    SELECT order_id, status, item, expected_delivery
+                    FROM orders
+                    WHERE order_id = %s
                 """, (order_id,))
                 row = cur.fetchone()
                 if not row:
@@ -21,8 +20,7 @@ def get_order_status(order_id: str) -> dict:
                     "order_id": row[0],
                     "status": row[1],
                     "item": row[2],
-                    "expected_delivery": str(row[3]),
-                    "customer_name": row[4]
+                    "expected_delivery": str(row[3])
                 }
     except Exception as e:
         return {"error": str(e)}
