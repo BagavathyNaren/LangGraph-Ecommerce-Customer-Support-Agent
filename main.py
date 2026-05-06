@@ -7,10 +7,10 @@ from langchain_core.messages import HumanMessage
 from graph.graph_builder import build_graph
 from security.guards import validate_input, validate_output
 from logger import get_logger
+from evaluation.evaluator import run_evaluation
 import re
 import os
 import time
-from evaluation.evaluator import run_evaluation
 import uuid
 import asyncio
 import json
@@ -148,22 +148,22 @@ async def chat_stream(message: str, thread_id: str = "default"):
         raise HTTPException(status_code=400, detail=str(e))
 
     async def generate():
-    config = {"configurable": {"thread_id": thread_id}}
-    try:
-        async for chunk, metadata in graph.astream(
-            {"messages": [HumanMessage(content=validated_message)]},
-            config=config,
-            stream_mode="messages"
-        ):
-            if (
-                hasattr(chunk, "content")
-                and chunk.content
-                and metadata.get("langgraph_node") == "respond"
+        config = {"configurable": {"thread_id": thread_id}}
+        try:
+            async for chunk, metadata in graph.astream(
+                {"messages": [HumanMessage(content=validated_message)]},
+                config=config,
+                stream_mode="messages"
             ):
-                yield f"data: {json.dumps({'token': chunk.content, 'done': False})}\n\n"
-        yield f"data: {json.dumps({'done': True})}\n\n"
-    except Exception as e:
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                if (
+                    hasattr(chunk, "content")
+                    and chunk.content
+                    and metadata.get("langgraph_node") == "respond"
+                ):
+                    yield f"data: {json.dumps({'token': chunk.content, 'done': False})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
