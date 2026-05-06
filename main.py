@@ -148,18 +148,22 @@ async def chat_stream(message: str, thread_id: str = "default"):
         raise HTTPException(status_code=400, detail=str(e))
 
     async def generate():
-        config = {"configurable": {"thread_id": thread_id}}
-        try:
-            async for chunk, metadata in graph.astream(
-                {"messages": [HumanMessage(content=validated_message)]},
-                config=config,
-                stream_mode="messages"
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        async for chunk, metadata in graph.astream(
+            {"messages": [HumanMessage(content=validated_message)]},
+            config=config,
+            stream_mode="messages"
+        ):
+            if (
+                hasattr(chunk, "content")
+                and chunk.content
+                and metadata.get("langgraph_node") == "respond"
             ):
-                if hasattr(chunk, "content") and chunk.content:
-                    yield f"data: {json.dumps({'token': chunk.content, 'done': False})}\n\n"
-            yield f"data: {json.dumps({'done': True})}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield f"data: {json.dumps({'token': chunk.content, 'done': False})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
