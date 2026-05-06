@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, field_validator, Field
@@ -147,24 +147,25 @@ async def chat_stream(message: str, thread_id: str = "default"):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-   async def generate():
-    config = {"configurable": {"thread_id": thread_id}}
-    try:
-        async for event in graph.astream_events(
-            {"messages": [HumanMessage(content=validated_message)]},
-            config=config,
-            version="v2"
-        ):
-            if (
-                event["event"] == "on_chat_model_stream"
-                and event.get("metadata", {}).get("langgraph_node") == "respond"
+    async def generate():
+        config = {"configurable": {"thread_id": thread_id}}
+        try:
+            async for event in graph.astream_events(
+                {"messages": [HumanMessage(content=validated_message)]},
+                config=config,
+                version="v2"
             ):
-                token = event["data"]["chunk"].content
-                if token:
-                    yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
-        yield f"data: {json.dumps({'done': True})}\n\n"
-    except Exception as e:
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                if (
+                    event["event"] == "on_chat_model_stream"
+                    and event.get("metadata", {}).get("langgraph_node") == "respond"
+                ):
+                    token = event["data"]["chunk"].content
+                    if token:
+                        yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.post("/evaluate")
