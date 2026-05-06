@@ -147,26 +147,24 @@ async def chat_stream(message: str, thread_id: str = "default"):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    async def generate():
-        config = {"configurable": {"thread_id": thread_id}}
-        try:
-            async for chunk, metadata in graph.astream(
-                {"messages": [HumanMessage(content=validated_message)]},
-                config=config,
-                stream_mode="messages"
+   async def generate():
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        async for event in graph.astream_events(
+            {"messages": [HumanMessage(content=validated_message)]},
+            config=config,
+            version="v2"
+        ):
+            if (
+                event["event"] == "on_chat_model_stream"
+                and event.get("metadata", {}).get("langgraph_node") == "respond"
             ):
-             # DEBUG - remove after
-                print(f"CHUNK: {repr(chunk)} | NODE: {metadata.get('langgraph_node')}")
-                if (
-                    hasattr(chunk, "content")
-                    and chunk.content
-                    and metadata.get("langgraph_node") == "respond"
-                ):
-                    yield f"data: {json.dumps({'token': chunk.content, 'done': False})}\n\n"
-            yield f"data: {json.dumps({'done': True})}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
+                token = event["data"]["chunk"].content
+                if token:
+                    yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.post("/evaluate")
