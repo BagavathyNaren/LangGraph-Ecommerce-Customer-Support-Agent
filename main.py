@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from cache.redis_cache import get_cached_response, set_cached_response
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -92,6 +93,19 @@ def chat(request: ChatRequest):
                 "thread_id": request.thread_id
             })
 
+        # Cache check — skip if PII detected
+        if not pii_detected:
+            cached = get_cached_response(validated_message)
+            if cached:
+                duration_ms = round((time.time() - start) * 1000)
+                logger.info("Cache hit — returning cached response", extra={
+                    "event": "cache_hit",
+                    "request_id": request_id,
+                    "thread_id": request.thread_id,
+                    "duration_ms": duration_ms
+                })
+                return {**cached, "request_id": request_id, "cache_hit": True}
+
         config = {"configurable": {"thread_id": request.thread_id}}
         result = graph.invoke(
             {"messages": [HumanMessage(content=validated_message)]},
@@ -99,6 +113,18 @@ def chat(request: ChatRequest):
         )
         raw_response = result["messages"][-1].content
         safe_response = validate_output(raw_response)
+
+        response_data = {
+            "response": safe_response,
+            "intent": result.get("intent"),
+            "escalated": result.get("escalated", False),
+            "order_id": result.get("order_id"),
+            "pii_detected": pii_detected
+        }
+
+        # Store in cache — skip if PII or escalated
+        if not pii_detected and not result.get("escalated", False):
+            set_cached_response(validated_message, response_data)
 
         duration_ms = round((time.time() - start) * 1000)
         logger.info("Chat request completed", extra={
@@ -108,17 +134,11 @@ def chat(request: ChatRequest):
             "intent": result.get("intent"),
             "escalated": result.get("escalated", False),
             "pii_detected": pii_detected,
-            "duration_ms": duration_ms
+            "duration_ms": duration_ms,
+            "cache_hit": False
         })
 
-        return {
-            "response": safe_response,
-            "intent": result.get("intent"),
-            "escalated": result.get("escalated", False),
-            "order_id": result.get("order_id"),
-            "pii_detected": pii_detected,
-            "request_id": request_id
-        }
+        return {**response_data, "request_id": request_id, "cache_hit": False}
 
     except ValueError as e:
         logger.warning("Request blocked", extra={
@@ -136,7 +156,7 @@ def chat(request: ChatRequest):
             "error": str(e)
         })
         raise HTTPException(status_code=500, detail="Internal agent error.")
-
+        
 @app.get("/chat/stream")
 async def chat_stream(message: str, thread_id: str = "default"):
     try:
