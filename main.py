@@ -11,6 +11,7 @@ import re
 import os
 import time
 from evaluation.evaluator import run_evaluation
+import uuid
 
 os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
@@ -70,8 +71,11 @@ def health():
 @app.post("/chat")
 def chat(request: ChatRequest):
     start = time.time()
+    request_id = str(uuid.uuid4())[:8]
+
     logger.info("Chat request received", extra={
         "event": "chat_request",
+        "request_id": request_id,
         "thread_id": request.thread_id,
         "message_length": len(request.message)
     })
@@ -82,6 +86,7 @@ def chat(request: ChatRequest):
         if pii_detected:
             logger.warning("PII detected and redacted in input", extra={
                 "event": "pii_redacted",
+                "request_id": request_id,
                 "thread_id": request.thread_id
             })
 
@@ -96,6 +101,7 @@ def chat(request: ChatRequest):
         duration_ms = round((time.time() - start) * 1000)
         logger.info("Chat request completed", extra={
             "event": "chat_response",
+            "request_id": request_id,
             "thread_id": request.thread_id,
             "intent": result.get("intent"),
             "escalated": result.get("escalated", False),
@@ -108,12 +114,14 @@ def chat(request: ChatRequest):
             "intent": result.get("intent"),
             "escalated": result.get("escalated", False),
             "order_id": result.get("order_id"),
-            "pii_detected": pii_detected
+            "pii_detected": pii_detected,
+            "request_id": request_id
         }
 
     except ValueError as e:
         logger.warning("Request blocked", extra={
             "event": "request_blocked",
+            "request_id": request_id,
             "thread_id": request.thread_id,
             "reason": str(e)
         })
@@ -121,6 +129,7 @@ def chat(request: ChatRequest):
     except Exception as e:
         logger.error("Internal agent error", extra={
             "event": "agent_error",
+            "request_id": request_id,
             "thread_id": request.thread_id,
             "error": str(e)
         })
