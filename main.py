@@ -155,6 +155,8 @@ async def chat_stream(message: str, thread_id: str = "default"):
                 config=config,
                 stream_mode="messages"
             ):
+             # DEBUG - remove after
+                print(f"CHUNK: {repr(chunk)} | NODE: {metadata.get('langgraph_node')}")
                 if (
                     hasattr(chunk, "content")
                     and chunk.content
