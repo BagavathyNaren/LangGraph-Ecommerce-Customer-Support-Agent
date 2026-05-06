@@ -148,9 +148,6 @@ async def chat_stream(message: str, thread_id: str = "default"):
         raise HTTPException(status_code=400, detail=str(e))
 
     async def generate():
-        yield f"data: {json.dumps({'token': 'TEST ', 'done': False})}\n\n"
-        yield f"data: {json.dumps({'token': 'STREAM ', 'done': False})}\n\n"
-        yield f"data: {json.dumps({'token': 'WORKING', 'done': False})}\n\n"
         config = {"configurable": {"thread_id": thread_id}}
         try:
             async for event in graph.astream_events(
@@ -158,10 +155,7 @@ async def chat_stream(message: str, thread_id: str = "default"):
                 config=config,
                 version="v2"
             ):
-                if (
-                    event["event"] == "on_chat_model_stream"
-                    and event.get("metadata", {}).get("langgraph_node") == "respond"
-                ):
+                if event["event"] == "on_chat_model_stream":
                     token = event["data"]["chunk"].content
                     if token:
                         yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
