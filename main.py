@@ -148,23 +148,27 @@ async def chat_stream(message: str, thread_id: str = "default"):
         raise HTTPException(status_code=400, detail=str(e))
 
     async def generate():
-        config = {"configurable": {"thread_id": thread_id}}
         try:
-            async for event in graph.astream_events(
-                {"messages": [HumanMessage(content=validated_message)]},
-                config=config,
-                version="v2"
-            ):
-                if event["event"] == "on_chat_model_stream":
-                    token = event["data"]["chunk"].content
-                    if token:
-                        yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
+            config = {"configurable": {"thread_id": thread_id}}
+            result = await loop.run_in_executor(
+                None,
+                lambda: graph.invoke(
+                    {"messages": [HumanMessage(content=validated_message)]},
+                    config=config
+                )
+            )
+            response = validate_output(result["messages"][-1].content)
+            words = response.split(" ")
+            for i, word in enumerate(words):
+                token = word if i == len(words) - 1 else word + " "
+                yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
+                await asyncio.sleep(0.04)
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
-
+    
 @app.post("/evaluate")
 def evaluate():
     if graph is None:
