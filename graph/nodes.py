@@ -8,7 +8,7 @@ from tools.real_tools import (
 import uuid
 import json
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
 
 INTENT_SYSTEM_PROMPT = """You are an intent classifier for an e-commerce support agent.
 Extract the intent and order_id from the customer message.
