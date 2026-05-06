@@ -93,7 +93,6 @@ def chat(request: ChatRequest):
                 "thread_id": request.thread_id
             })
 
-        # Cache check — skip if PII detected
         if not pii_detected:
             cached = get_cached_response(validated_message)
             if cached:
@@ -122,7 +121,6 @@ def chat(request: ChatRequest):
             "pii_detected": pii_detected
         }
 
-        # Store in cache — skip if PII or escalated
         if not pii_detected and not result.get("escalated", False):
             set_cached_response(validated_message, response_data)
 
@@ -156,7 +154,7 @@ def chat(request: ChatRequest):
             "error": str(e)
         })
         raise HTTPException(status_code=500, detail="Internal agent error.")
-        
+
 @app.get("/chat/stream")
 async def chat_stream(message: str, thread_id: str = "default"):
     try:
@@ -177,6 +175,24 @@ async def chat_stream(message: str, thread_id: str = "default"):
             "pii_detected": pii_detected
         })
         try:
+            if not pii_detected:
+                cached = get_cached_response(validated_message)
+                if cached:
+                    duration_ms = round((time.time() - start) * 1000)
+                    logger.info("Stream cache hit", extra={
+                        "event": "stream_cache_hit",
+                        "request_id": request_id,
+                        "thread_id": thread_id,
+                        "duration_ms": duration_ms
+                    })
+                    words = cached["response"].split(" ")
+                    for i, word in enumerate(words):
+                        token = word if i == len(words) - 1 else word + " "
+                        yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
+                        await asyncio.sleep(0.04)
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    return
+
             config = {"configurable": {"thread_id": thread_id}}
             result = await loop.run_in_executor(
                 None,
@@ -186,6 +202,16 @@ async def chat_stream(message: str, thread_id: str = "default"):
                 )
             )
             response = validate_output(result["messages"][-1].content)
+
+            if not pii_detected and not result.get("escalated", False):
+                set_cached_response(validated_message, {
+                    "response": response,
+                    "intent": result.get("intent"),
+                    "escalated": result.get("escalated", False),
+                    "order_id": result.get("order_id"),
+                    "pii_detected": pii_detected
+                })
+
             words = response.split(" ")
             for i, word in enumerate(words):
                 token = word if i == len(words) - 1 else word + " "
@@ -203,6 +229,7 @@ async def chat_stream(message: str, thread_id: str = "default"):
                 "duration_ms": duration_ms
             })
             yield f"data: {json.dumps({'done': True})}\n\n"
+
         except Exception as e:
             logger.error("Stream error", extra={
                 "event": "stream_error",
