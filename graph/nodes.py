@@ -92,17 +92,13 @@ def escalate(state: AgentState) -> AgentState:
     state["messages"].append(AIMessage(content=reply))
     return state
 
-async def respond(state: AgentState) -> AgentState:
+def respond(state: AgentState) -> AgentState:
     conversation = state.get("messages", [])
     tool_result = state.get("tool_result", "No tool result available.")
-
-    full_content = ""
-    async for chunk in llm.astream([
+    response = llm.invoke([
         SystemMessage(content=RESPONSE_SYSTEM_PROMPT),
         *conversation,
         HumanMessage(content=f"Tool result: {tool_result}")
-    ]):
-        full_content += chunk.content
-
-    state["messages"].append(AIMessage(content=full_content))
+    ])
+    state["messages"].append(AIMessage(content=response.content))
     return state
