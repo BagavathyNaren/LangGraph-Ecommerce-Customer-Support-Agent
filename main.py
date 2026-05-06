@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, field_validator, Field
 from langchain_core.messages import HumanMessage
 from graph.graph_builder import build_graph
@@ -12,6 +12,8 @@ import os
 import time
 from evaluation.evaluator import run_evaluation
 import uuid
+import asyncio
+import json
 
 os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
@@ -134,6 +136,32 @@ def chat(request: ChatRequest):
             "error": str(e)
         })
         raise HTTPException(status_code=500, detail="Internal agent error.")
+
+@app.get("/chat/stream")
+async def chat_stream(message: str, thread_id: str = "default"):
+    try:
+        loop = asyncio.get_event_loop()
+        validated_message, pii_detected = await loop.run_in_executor(
+            None, validate_input, message
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    async def generate():
+        config = {"configurable": {"thread_id": thread_id}}
+        try:
+            async for chunk, metadata in graph.astream(
+                {"messages": [HumanMessage(content=validated_message)]},
+                config=config,
+                stream_mode="messages"
+            ):
+                if hasattr(chunk, "content") and chunk.content:
+                    yield f"data: {json.dumps({'token': chunk.content, 'done': False})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.post("/evaluate")
 def evaluate():
