@@ -148,6 +148,14 @@ async def chat_stream(message: str, thread_id: str = "default"):
         raise HTTPException(status_code=400, detail=str(e))
 
     async def generate():
+        start = time.time()
+        request_id = str(uuid.uuid4())[:8]
+        logger.info("Stream request received", extra={
+            "event": "stream_request",
+            "request_id": request_id,
+            "thread_id": thread_id,
+            "pii_detected": pii_detected
+        })
         try:
             config = {"configurable": {"thread_id": thread_id}}
             result = await loop.run_in_executor(
@@ -163,12 +171,29 @@ async def chat_stream(message: str, thread_id: str = "default"):
                 token = word if i == len(words) - 1 else word + " "
                 yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
                 await asyncio.sleep(0.04)
+
+            duration_ms = round((time.time() - start) * 1000)
+            logger.info("Stream request completed", extra={
+                "event": "stream_response",
+                "request_id": request_id,
+                "thread_id": thread_id,
+                "intent": result.get("intent"),
+                "escalated": result.get("escalated", False),
+                "pii_detected": pii_detected,
+                "duration_ms": duration_ms
+            })
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
+            logger.error("Stream error", extra={
+                "event": "stream_error",
+                "request_id": request_id,
+                "thread_id": thread_id,
+                "error": str(e)
+            })
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
-    
+
 @app.post("/evaluate")
 def evaluate():
     if graph is None:
