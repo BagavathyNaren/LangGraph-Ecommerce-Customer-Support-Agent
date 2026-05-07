@@ -26,6 +26,7 @@ def classify_intent(state: AgentState) -> AgentState:
         SystemMessage(content=INTENT_SYSTEM_PROMPT),
         HumanMessage(content=last_message)
     ])
+    state["tool_result"] = None
     try:
         raw = response.content.strip()
         data = json.loads(raw)
@@ -97,13 +98,17 @@ def escalate(state: AgentState) -> AgentState:
 
 def respond(state: AgentState) -> AgentState:
     last_user_message = state["messages"][-1].content
-    tool_result = state.get("tool_result", "No tool result available.")
-    print(f">>> RESPOND: msg={last_user_message}", flush=True)
-    print(f">>> RESPOND tool_result={tool_result}", flush=True)
+    current_intent = state.get("intent", "unclear")
+    tool_result = state.get("tool_result", None)
+
+    if current_intent == "unclear" or tool_result is None:
+        context = "No tool result available. Respond helpfully based on the message alone."
+    else:
+        context = f"Tool result: {tool_result}"
 
     response = llm.invoke([
         SystemMessage(content=RESPONSE_SYSTEM_PROMPT),
-        HumanMessage(content=f"Customer message: {last_user_message}\nTool result: {tool_result}")
+        HumanMessage(content=f"Customer message: {last_user_message}\n{context}")
     ])
     state["messages"].append(AIMessage(content=response.content))
     return state
