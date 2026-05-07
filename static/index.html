@@ -160,7 +160,7 @@
     const badges = [];
     if (isEscalated) badges.push('<span class="badge escalated">🚨 Escalated</span>');
     if (metadata.intent && metadata.intent !== 'unclear') badges.push(`<span class="badge intent">${metadata.intent.replace('_', ' ')}</span>`);
-    if (metadata.order_id) badges.push(`<span class="badge order">📦 ${metadata.order_id}</span>`);
+    if (metadata.order_id && metadata.order_id !== 'null') badges.push(`<span class="badge order">📦 ${metadata.order_id}</span>`);
     if (metadata.cache_hit) badges.push('<span class="badge cache">⚡ Cached</span>');
 
     row.id = '';
