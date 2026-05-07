@@ -93,12 +93,12 @@ def escalate(state: AgentState) -> AgentState:
     return state
 
 def respond(state: AgentState) -> AgentState:
-    conversation = state.get("messages", [])
+    last_user_message = state["messages"][-1].content
     tool_result = state.get("tool_result", "No tool result available.")
+
     response = llm.invoke([
         SystemMessage(content=RESPONSE_SYSTEM_PROMPT),
-        *conversation,
-        HumanMessage(content=f"Tool result: {tool_result}")
+        HumanMessage(content=f"Customer message: {last_user_message}\nTool result: {tool_result}")
     ])
     state["messages"].append(AIMessage(content=response.content))
     return state
