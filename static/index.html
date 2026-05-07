@@ -155,7 +155,7 @@
     const isEscalated = metadata.escalated === true;
     if (bubble) bubble.className = isEscalated ? 'bubble escalated' : 'bubble';
     if (bubble) bubble.textContent = fullText;
-
+    if (bubble) bubble.removeAttribute('id');
     // Build badges
     const badges = [];
     if (isEscalated) badges.push('<span class="badge escalated">🚨 Escalated</span>');
