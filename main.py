@@ -69,7 +69,51 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    import psycopg
+    from cache.redis_cache import r
+
+    # Neon DB check
+    try:
+        db_url = os.environ.get("DATABASE_URL", "")
+        conn = psycopg.connect(db_url, connect_timeout=3)
+        conn.close()
+        db_status = "healthy"
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)[:60]}"
+
+    # Redis check
+    try:
+        if r is not None:
+            r.ping()
+            redis_status = "healthy"
+        else:
+            redis_status = "unavailable"
+    except Exception as e:
+        redis_status = f"unhealthy: {str(e)[:60]}"
+
+    # LangSmith check
+    langsmith_enabled = os.environ.get("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+    langsmith_status = "enabled" if langsmith_enabled else "disabled"
+
+    # Graph check
+    graph_status = "ready" if graph is not None else "not initialized"
+
+    overall = "healthy" if all([
+        db_status == "healthy",
+        redis_status == "healthy",
+        graph_status == "ready"
+    ]) else "degraded"
+
+    return {
+        "status": overall,
+        "components": {
+            "database": db_status,
+            "redis": redis_status,
+            "langsmith": langsmith_status,
+            "graph": graph_status
+        },
+        "version": "1.0.0"
+    }
 
 @app.post("/chat")
 def chat(request: ChatRequest):
