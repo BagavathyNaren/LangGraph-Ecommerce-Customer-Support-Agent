@@ -15,6 +15,7 @@ import time
 import uuid
 import asyncio
 import json
+import psycopg
 
 os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
@@ -69,10 +70,8 @@ def root():
 
 @app.get("/health")
 def health():
-    import psycopg
     from cache.redis_cache import r
 
-    # Neon DB check
     try:
         db_url = os.environ.get("DATABASE_URL", "")
         conn = psycopg.connect(db_url, connect_timeout=3)
@@ -81,7 +80,6 @@ def health():
     except Exception as e:
         db_status = f"unhealthy: {str(e)[:60]}"
 
-    # Redis check
     try:
         if r is not None:
             r.ping()
@@ -91,11 +89,7 @@ def health():
     except Exception as e:
         redis_status = f"unhealthy: {str(e)[:60]}"
 
-    # LangSmith check
-    langsmith_enabled = os.environ.get("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-    langsmith_status = "enabled" if langsmith_enabled else "disabled"
-
-    # Graph check
+    langsmith_status = "enabled" if os.environ.get("LANGCHAIN_TRACING_V2", "false").lower() == "true" else "disabled"
     graph_status = "ready" if graph is not None else "not initialized"
 
     overall = "healthy" if all([
@@ -234,7 +228,7 @@ async def chat_stream(message: str, thread_id: str = "default"):
                         token = word if i == len(words) - 1 else word + " "
                         yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
                         await asyncio.sleep(0.04)
-                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    yield f"data: {json.dumps({'done': True, 'intent': cached.get('intent'), 'escalated': cached.get('escalated', False), 'order_id': cached.get('order_id'), 'cache_hit': True})}\n\n"
                     return
 
             config = {"configurable": {"thread_id": thread_id}}
@@ -272,7 +266,7 @@ async def chat_stream(message: str, thread_id: str = "default"):
                 "pii_detected": pii_detected,
                 "duration_ms": duration_ms
             })
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'intent': result.get('intent'), 'escalated': result.get('escalated', False), 'order_id': result.get('order_id'), 'cache_hit': False})}\n\n"
 
         except Exception as e:
             logger.error("Stream error", extra={
