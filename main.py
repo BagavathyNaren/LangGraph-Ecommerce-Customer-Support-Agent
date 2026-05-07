@@ -132,7 +132,7 @@ def chat(request: ChatRequest):
             })
 
         if not pii_detected:
-            cached = get_cached_response(validated_message)
+            cached = get_cached_response(validated_message, request.thread_id)
             if cached:
                 duration_ms = round((time.time() - start) * 1000)
                 logger.info("Cache hit — returning cached response", extra={
@@ -160,7 +160,7 @@ def chat(request: ChatRequest):
         }
 
         if not pii_detected and not result.get("escalated", False):
-            set_cached_response(validated_message, response_data)
+            set_cached_response(validated_message, response_data, request.thread_id)
 
         duration_ms = round((time.time() - start) * 1000)
         logger.info("Chat request completed", extra={
@@ -214,7 +214,7 @@ async def chat_stream(message: str, thread_id: str = "default"):
         })
         try:
             if not pii_detected:
-                cached = get_cached_response(validated_message)
+                cached = get_cached_response(validated_message, thread_id)
                 if cached:
                     duration_ms = round((time.time() - start) * 1000)
                     logger.info("Stream cache hit", extra={
@@ -248,7 +248,7 @@ async def chat_stream(message: str, thread_id: str = "default"):
                     "escalated": result.get("escalated", False),
                     "order_id": result.get("order_id"),
                     "pii_detected": pii_detected
-                })
+                }, thread_id)
 
             words = response.split(" ")
             for i, word in enumerate(words):
