@@ -65,6 +65,7 @@
 
 <script>
   let threadId = generateId();
+  let currentController = null;
   document.getElementById('thread-id').textContent = threadId;
 
   function generateId() {
@@ -113,8 +114,12 @@
     let metadata = {};
 
     try {
+      if (currentController) currentController.abort();
+      currentController = new AbortController();
       const params = new URLSearchParams({ message: text, thread_id: threadId });
-      const response = await fetch(`/chat/stream?${params}`);
+      const response = await fetch(`/chat/stream?${params}`, {
+        signal: currentController.signal
+      });
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
@@ -140,8 +145,10 @@
         }
       }
     } catch(e) {
-      fullText = 'Connection error. Please try again.';
-    }
+  if (e.name !== 'AbortError') {
+    fullText = 'Connection error. Please try again.';
+  }
+}
 
     // Finalize bubble
     const bubble = document.getElementById('streaming-bubble');
