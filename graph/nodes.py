@@ -19,11 +19,12 @@ INTENT_SYSTEM_PROMPT = """You are an intent classifier for an e-commerce support
 Extract the intent and order_id from the customer message.
 Return ONLY valid JSON. No extra text, no markdown, no explanation.
 Format: {"intent": "<intent>", "order_id": "<order_id or null>"}
-Valid intents: order_status, return_request, refund_status, cancel_order, product_query, unclear"""
+Valid intents: order_status, return_request, refund_status, cancel_order, unclear"""
 
-RESPONSE_SYSTEM_PROMPT = """You are a helpful, professional e-commerce customer support agent.
-Use the conversation history and tool result to give a clear, concise response.
-Be empathetic but efficient. 2-3 sentences max."""
+RESPONSE_SYSTEM_PROMPT = """You are an e-commerce customer support agent.
+You ONLY handle: order status, returns, refunds, cancellations.
+If question is unrelated to these topics, say: 'I can only help with order status, returns, refunds, and cancellations.'
+Use tool result if provided. 2-3 sentences max."""
 
 def classify_intent(state: AgentState) -> AgentState:
     state["tool_result"] = None  # reset FIRST, before LLM call
@@ -35,7 +36,7 @@ def classify_intent(state: AgentState) -> AgentState:
     try:
         raw = response.content.strip()
         # Strip markdown fences Haiku adds despite instructions
-        logger.info("Classifier raw output", extra={"event": "classifier_debug", "raw": raw})
+        # logger.info("Classifier raw output", extra={"event": "classifier_debug", "raw": raw})
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
