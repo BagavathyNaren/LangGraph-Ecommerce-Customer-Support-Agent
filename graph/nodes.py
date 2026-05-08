@@ -8,6 +8,9 @@ from tools.real_tools import (
 )
 import uuid
 import json
+from logger import get_logger
+
+logger = get_logger("ecommerce-agent")
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
 classifier_llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0)
