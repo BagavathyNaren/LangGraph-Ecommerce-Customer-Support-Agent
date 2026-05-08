@@ -4,7 +4,7 @@ def route_intent(state: AgentState) -> str:
     intent = state.get("intent", "unclear")
     valid_intents = [
         "order_status", "return_request", "refund_status",
-        "cancel_order", "product_query"
+        "cancel_order"
     ]
     if intent in valid_intents:
         return "handle_tool"
