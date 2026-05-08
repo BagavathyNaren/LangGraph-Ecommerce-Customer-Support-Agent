@@ -32,6 +32,7 @@ def classify_intent(state: AgentState) -> AgentState:
     try:
         raw = response.content.strip()
         # Strip markdown fences Haiku adds despite instructions
+        logger.info("Classifier raw output", extra={"event": "classifier_debug", "raw": raw})
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
