@@ -63,9 +63,6 @@ def handle_tool(state: AgentState) -> AgentState:
         state["refund_amount"] = result.get("amount", 0)
     elif intent == "cancel_order":
         result = cancel_order(order_id)
-    elif intent == "product_query":
-        last_message = state["messages"][-1].content
-        result = search_knowledge_base(last_message)
     else:
         result = {"answer": "I could not understand your request."}
         state["retry_count"] = state.get("retry_count", 0) + 1
@@ -73,7 +70,6 @@ def handle_tool(state: AgentState) -> AgentState:
     # print(f">>> TOOL_RESULT: {result}", flush=True)
     state["tool_result"] = str(result)
     return state
-
 
 def escalation_check(state: AgentState) -> AgentState:
     last_message = state["messages"][-1].content.lower()
