@@ -117,7 +117,6 @@ def escalate(state: AgentState) -> AgentState:
     return state
 
 def respond(state: AgentState) -> AgentState:
-    last_user_message = state["messages"][-1].content
     current_intent = state.get("intent", "unclear")
     tool_result = state.get("tool_result", None)
 
@@ -126,9 +125,12 @@ def respond(state: AgentState) -> AgentState:
     else:
         context = f"Tool result: {tool_result}"
 
-    response = llm.invoke([
-        SystemMessage(content=RESPONSE_SYSTEM_PROMPT),
-        HumanMessage(content=f"Customer message: {last_user_message}\n{context}")
-    ])
+    # Build messages with conversation history (last 6 messages = up to 3 turns)
+    messages = [SystemMessage(content=RESPONSE_SYSTEM_PROMPT)]
+    history = state["messages"][-6:]  # keep context window small to control cost
+    messages.extend(history)
+    messages.append(SystemMessage(content=context))
+
+    response = llm.invoke(messages)
     state["messages"].append(AIMessage(content=response.content))
     return state
