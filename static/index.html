@@ -129,10 +129,15 @@
         signal: currentController.signal
       });
 
-      // Handle HTTP errors (400 blocked, 500 crash, etc.) — show message instead of blank bubble
+      // Handle HTTP errors (400 blocked, 422 validation, 500 crash, etc.)
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        fullText = errorData.detail || `Request failed (${response.status}). Please try again.`;
+        // Pydantic 422 returns detail as array of objects; HTTPException returns string
+        if (Array.isArray(errorData.detail)) {
+          fullText = errorData.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('. ');
+        } else {
+          fullText = errorData.detail || `Request failed (${response.status}). Please try again.`;
+        }
       } else {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
