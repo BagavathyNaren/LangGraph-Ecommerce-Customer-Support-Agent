@@ -8,9 +8,12 @@ from tools.real_tools import (
 )
 import uuid
 import json
+import re
 from logger import get_logger
 
 logger = get_logger("ecommerce-agent")
+
+ORDER_ID_PATTERN = re.compile(r"^ORD\d{3,10}$")
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
 classifier_llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0)
@@ -53,7 +56,14 @@ def classify_intent(state: AgentState) -> AgentState:
 def handle_tool(state: AgentState) -> AgentState:
     intent = state["intent"]
     order_id = state.get("order_id") or "UNKNOWN"
-    # print(f">>> HANDLE_TOOL: intent={intent} order_id={order_id}", flush=True)
+
+    # Validate order_id format before querying DB
+    if not ORDER_ID_PATTERN.match(order_id):
+        logger.warning("Invalid order ID format", extra={
+            "event": "invalid_order_id", "order_id": order_id, "intent": intent
+        })
+        state["tool_result"] = str({"error": f"Could not find a valid order ID. Please provide your order ID in the format ORD followed by digits (e.g., ORD001)."})
+        return state
 
     if intent == "order_status":
         result = get_order_status(order_id)
@@ -68,7 +78,6 @@ def handle_tool(state: AgentState) -> AgentState:
         result = {"answer": "I could not understand your request."}
         state["retry_count"] = state.get("retry_count", 0) + 1
 
-    # print(f">>> TOOL_RESULT: {result}", flush=True)
     state["tool_result"] = str(result)
     return state
 

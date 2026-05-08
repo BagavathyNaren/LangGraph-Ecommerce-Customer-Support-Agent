@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from cache.redis_cache import get_cached_response, set_cached_response
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, field_validator, Field
@@ -193,8 +193,10 @@ def chat(request: ChatRequest):
         })
         raise HTTPException(status_code=500, detail="Internal agent error.")
 
-@app.get("/chat/stream")
-async def chat_stream(message: str, thread_id: str = "default"):
+@app.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    message = request.message
+    thread_id = request.thread_id
     try:
         loop = asyncio.get_event_loop()
         validated_message, pii_detected = await loop.run_in_executor(
@@ -280,7 +282,10 @@ async def chat_stream(message: str, thread_id: str = "default"):
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.post("/evaluate")
-def evaluate():
+def evaluate(x_api_key: str = Header(None)):
+    expected_key = os.environ.get("EVAL_API_KEY", "")
+    if not expected_key or x_api_key != expected_key:
+        raise HTTPException(status_code=403, detail="Forbidden: invalid or missing API key.")
     if graph is None:
         raise HTTPException(status_code=503, detail="Agent not ready.")
     try:
