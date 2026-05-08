@@ -52,7 +52,7 @@ def classify_intent(state: AgentState) -> AgentState:
 def handle_tool(state: AgentState) -> AgentState:
     intent = state["intent"]
     order_id = state.get("order_id") or "UNKNOWN"
-    print(f">>> HANDLE_TOOL: intent={intent} order_id={order_id}", flush=True)
+    # print(f">>> HANDLE_TOOL: intent={intent} order_id={order_id}", flush=True)
 
     if intent == "order_status":
         result = get_order_status(order_id)
@@ -70,7 +70,7 @@ def handle_tool(state: AgentState) -> AgentState:
         result = {"answer": "I could not understand your request."}
         state["retry_count"] = state.get("retry_count", 0) + 1
 
-    print(f">>> TOOL_RESULT: {result}", flush=True)
+    # print(f">>> TOOL_RESULT: {result}", flush=True)
     state["tool_result"] = str(result)
     return state
 
