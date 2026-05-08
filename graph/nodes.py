@@ -23,14 +23,20 @@ Use the conversation history and tool result to give a clear, concise response.
 Be empathetic but efficient. 2-3 sentences max."""
 
 def classify_intent(state: AgentState) -> AgentState:
+    state["tool_result"] = None  # reset FIRST, before LLM call
     last_message = state["messages"][-1].content
     response = classifier_llm.invoke([
         SystemMessage(content=INTENT_SYSTEM_PROMPT),
         HumanMessage(content=last_message)
     ])
-    state["tool_result"] = None
     try:
         raw = response.content.strip()
+        # Strip markdown fences Haiku adds despite instructions
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
         data = json.loads(raw)
         state["intent"] = data.get("intent", "unclear")
         state["order_id"] = data.get("order_id") or state.get("order_id")
