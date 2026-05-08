@@ -1,4 +1,5 @@
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic  
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from graph.state import AgentState
 from tools.real_tools import (
@@ -7,28 +8,41 @@ from tools.real_tools import (
 )
 import uuid
 import json
+from logger import get_logger
+
+logger = get_logger("ecommerce-agent")
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
+classifier_llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0)
 
 INTENT_SYSTEM_PROMPT = """You are an intent classifier for an e-commerce support agent.
 Extract the intent and order_id from the customer message.
 Return ONLY valid JSON. No extra text, no markdown, no explanation.
 Format: {"intent": "<intent>", "order_id": "<order_id or null>"}
-Valid intents: order_status, return_request, refund_status, cancel_order, product_query, unclear"""
+Valid intents: order_status, return_request, refund_status, cancel_order, unclear"""
 
-RESPONSE_SYSTEM_PROMPT = """You are a helpful, professional e-commerce customer support agent.
-Use the conversation history and tool result to give a clear, concise response.
-Be empathetic but efficient. 2-3 sentences max."""
+RESPONSE_SYSTEM_PROMPT = """You are an e-commerce customer support agent.
+You ONLY handle: order status, returns, refunds, cancellations.
+If question is unrelated to these topics, say: 'I can only help with order status, returns, refunds, and cancellations.'
+Use tool result if provided. 2-3 sentences max."""
 
 def classify_intent(state: AgentState) -> AgentState:
+    state["tool_result"] = None  # reset FIRST, before LLM call
     last_message = state["messages"][-1].content
-    response = llm.invoke([
+    response = classifier_llm.invoke([
         SystemMessage(content=INTENT_SYSTEM_PROMPT),
         HumanMessage(content=last_message)
     ])
     state["tool_result"] = None
     try:
         raw = response.content.strip()
+        # Strip markdown fences Haiku adds despite instructions
+        # logger.info("Classifier raw output", extra={"event": "classifier_debug", "raw": raw})
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
         data = json.loads(raw)
         state["intent"] = data.get("intent", "unclear")
         state["order_id"] = data.get("order_id") or state.get("order_id")
@@ -39,7 +53,7 @@ def classify_intent(state: AgentState) -> AgentState:
 def handle_tool(state: AgentState) -> AgentState:
     intent = state["intent"]
     order_id = state.get("order_id") or "UNKNOWN"
-    print(f">>> HANDLE_TOOL: intent={intent} order_id={order_id}", flush=True)
+    # print(f">>> HANDLE_TOOL: intent={intent} order_id={order_id}", flush=True)
 
     if intent == "order_status":
         result = get_order_status(order_id)
@@ -50,14 +64,11 @@ def handle_tool(state: AgentState) -> AgentState:
         state["refund_amount"] = result.get("amount", 0)
     elif intent == "cancel_order":
         result = cancel_order(order_id)
-    elif intent == "product_query":
-        last_message = state["messages"][-1].content
-        result = search_knowledge_base(last_message)
     else:
         result = {"answer": "I could not understand your request."}
         state["retry_count"] = state.get("retry_count", 0) + 1
 
-    print(f">>> TOOL_RESULT: {result}", flush=True)
+    # print(f">>> TOOL_RESULT: {result}", flush=True)
     state["tool_result"] = str(result)
     return state
 
