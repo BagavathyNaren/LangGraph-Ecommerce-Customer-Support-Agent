@@ -1,4 +1,5 @@
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic  
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from graph.state import AgentState
 from tools.real_tools import (
@@ -9,6 +10,7 @@ import uuid
 import json
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
+classifier_llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0)
 
 INTENT_SYSTEM_PROMPT = """You are an intent classifier for an e-commerce support agent.
 Extract the intent and order_id from the customer message.
@@ -22,7 +24,7 @@ Be empathetic but efficient. 2-3 sentences max."""
 
 def classify_intent(state: AgentState) -> AgentState:
     last_message = state["messages"][-1].content
-    response = llm.invoke([
+    response = classifier_llm.invoke([
         SystemMessage(content=INTENT_SYSTEM_PROMPT),
         HumanMessage(content=last_message)
     ])
