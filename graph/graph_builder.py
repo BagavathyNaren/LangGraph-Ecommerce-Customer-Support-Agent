@@ -3,20 +3,11 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from graph.state import AgentState
 from graph.nodes import classify_intent, handle_tool, escalation_check, escalate, respond
 from graph.edges import route_intent, route_escalation
-from psycopg_pool import ConnectionPool
+from tools.db import get_pool
 import os
 
 def build_graph():
-    db_url = os.environ["DATABASE_URL"]
-    pool = ConnectionPool(
-        db_url,
-        min_size=0,
-        max_size=5,
-        open=True,
-        max_idle=60,
-        reconnect_timeout=30,
-        kwargs={"autocommit": True, "connect_timeout": 10}
-    )
+    pool = get_pool()
 
     checkpointer = PostgresSaver(pool)
     checkpointer.setup()

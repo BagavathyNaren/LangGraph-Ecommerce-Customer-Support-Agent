@@ -1,8 +1,5 @@
 import os
-import psycopg
-
-def get_connection():
-    return psycopg.connect(os.environ["DATABASE_URL"])
+from tools.db import get_connection
 
 def get_order_status(order_id: str) -> dict:
     try:

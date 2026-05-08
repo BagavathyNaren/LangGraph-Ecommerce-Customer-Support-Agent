@@ -15,8 +15,8 @@ logger = get_logger("ecommerce-agent")
 
 ORDER_ID_PATTERN = re.compile(r"^ORD\d{3,10}$")
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
-classifier_llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True, request_timeout=30)
+classifier_llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0, timeout=15)
 
 INTENT_SYSTEM_PROMPT = """You are an intent classifier for an e-commerce support agent.
 Extract the intent and order_id from the customer message.
