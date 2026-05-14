@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, field_validator, Field
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from graph.graph_builder import build_graph
 from security.guards import validate_input, validate_output
 from logger import get_logger
@@ -32,6 +32,13 @@ BANNED_PATTERNS = [
 ]
 
 graph = None
+
+def get_final_response(result):
+    """Extract the final AI response from the ReAct message list."""
+    for msg in reversed(result["messages"]):
+        if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
+            return msg.content
+    return result["messages"][-1].content
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -157,7 +164,7 @@ def chat(request: ChatRequest):
             {"messages": [HumanMessage(content=validated_message)]},
             config=config
         )
-        raw_response = result["messages"][-1].content
+        raw_response = get_final_response(result)
         safe_response = validate_output(raw_response)
 
         response_data = {
@@ -250,7 +257,7 @@ async def chat_stream(request: ChatRequest):
                     config=config
                 )
             )
-            response = validate_output(result["messages"][-1].content)
+            response = validate_output(get_final_response(result))
 
             if not pii_detected and not result.get("escalated", False):
                 set_cached_response(validated_message, {

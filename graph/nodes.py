@@ -1,103 +1,82 @@
 from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic  
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 from graph.state import AgentState
-from tools.real_tools import (
-    get_order_status, initiate_return, get_refund_status,
-    cancel_order, search_knowledge_base, create_support_ticket,
-    get_customer_orders
-)
+from tools.agent_tools import AGENT_TOOLS
+from tools.real_tools import create_support_ticket
 import uuid
-import json
-import re
 from logger import get_logger
 
 logger = get_logger("ecommerce-agent")
 
-ORDER_ID_PATTERN = re.compile(r"^ORD\d{3,10}$")
-
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True, request_timeout=30)
-classifier_llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0, timeout=15)
+agent_llm = llm.bind_tools(AGENT_TOOLS)
 
-INTENT_SYSTEM_PROMPT = """You are an intent classifier for an e-commerce support agent.
-Extract the intent, order_id, and customer_name from the customer message.
-Return ONLY valid JSON. No extra text, no markdown, no explanation.
-Format: {"intent": "<intent>", "order_id": "<order_id or null>", "customer_name": "<name or email or null>"}
-Valid intents: order_status, return_request, refund_status, cancel_order, customer_lookup, unclear
-Use customer_lookup when the user asks about their orders by providing their name or email instead of an order ID."""
-
-RESPONSE_SYSTEM_PROMPT = """You are an e-commerce customer support agent.
+AGENT_SYSTEM_PROMPT = """You are an e-commerce customer support agent.
 You handle: order status, returns, refunds, cancellations, and customer order lookups.
-If question is unrelated to these topics, say: 'I can only help with order status, returns, refunds, cancellations, and customer lookups.'
-When showing customer orders, format them clearly with order ID, item, status, and delivery date.
-If a customer lookup returned no results, suggest they try searching by their full name instead.
-Use tool result if provided. Keep responses concise."""
 
-def classify_intent(state: AgentState) -> AgentState:
-    state["tool_result"] = None  # reset FIRST, before LLM call
-    last_message = state["messages"][-1].content
-    response = classifier_llm.invoke([
-        SystemMessage(content=INTENT_SYSTEM_PROMPT),
-        HumanMessage(content=last_message)
-    ])
-    state["tool_result"] = None
-    try:
-        raw = response.content.strip()
-        # Strip markdown fences Haiku adds despite instructions
-        # logger.info("Classifier raw output", extra={"event": "classifier_debug", "raw": raw})
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
-        data = json.loads(raw)
-        state["intent"] = data.get("intent", "unclear")
-        state["order_id"] = data.get("order_id") or state.get("order_id")
-        if data.get("customer_name"):
-            state["customer_name"] = data["customer_name"]
-    except json.JSONDecodeError:
-        state["intent"] = "unclear"
+RULES:
+- If the question is unrelated to these topics, politely decline.
+- If a customer provides their name, use lookup_customer_orders to find their orders.
+- If they provide an order ID (like ORD001), use the appropriate tool.
+- If an email address is provided, suggest they search by name instead (emails are protected for privacy).
+- You can call MULTIPLE tools in one turn if needed (e.g., check status AND refund for the same order).
+- When showing customer orders, format them clearly with order ID, item, status, and delivery date.
+- Keep responses concise and helpful.
+- NEVER make up order data — always use tools to look up real information."""
+
+# Map tool names to intent labels for badge display
+TOOL_INTENT_MAP = {
+    "check_order_status": "order_status",
+    "check_refund_status": "refund_status",
+    "process_return": "return_request",
+    "process_cancellation": "cancel_order",
+    "lookup_customer_orders": "customer_lookup",
+}
+
+
+def agent_node(state: AgentState) -> AgentState:
+    """The agent LLM decides what to do — call tools or respond directly."""
+    messages = [SystemMessage(content=AGENT_SYSTEM_PROMPT)] + state["messages"]
+    response = agent_llm.invoke(messages)
+    state["messages"].append(response)
     return state
 
-def handle_tool(state: AgentState) -> AgentState:
-    intent = state["intent"]
 
-    # Customer lookup doesn't need an order ID
-    if intent == "customer_lookup":
-        customer_name = state.get("customer_name", "UNKNOWN")
-        result = get_customer_orders(customer_name)
-        state["tool_result"] = str(result)
-        return state
+def tool_node(state: AgentState) -> AgentState:
+    """Execute tool calls from the agent's last response."""
+    last_message = state["messages"][-1]
+    tool_map = {t.name: t for t in AGENT_TOOLS}
 
-    order_id = state.get("order_id") or "UNKNOWN"
+    for tool_call in last_message.tool_calls:
+        tool_name = tool_call["name"]
+        tool_args = tool_call["args"]
 
-    # Validate order_id format before querying DB
-    if not ORDER_ID_PATTERN.match(order_id):
-        logger.warning("Invalid order ID format", extra={
-            "event": "invalid_order_id", "order_id": order_id, "intent": intent
-        })
-        state["tool_result"] = str({"error": f"Could not find a valid order ID. Please provide your order ID in the format ORD followed by digits (e.g., ORD001)."})
-        return state
+        tool_fn = tool_map.get(tool_name)
+        if tool_fn:
+            result = tool_fn.invoke(tool_args)
+        else:
+            result = f"Tool {tool_name} not found."
 
-    if intent == "order_status":
-        result = get_order_status(order_id)
-    elif intent == "return_request":
-        result = initiate_return(order_id, "customer request")
-    elif intent == "refund_status":
-        result = get_refund_status(order_id)
-        state["refund_amount"] = result.get("amount", 0)
-    elif intent == "cancel_order":
-        result = cancel_order(order_id)
-    else:
-        result = {"answer": "I could not understand your request."}
-        state["retry_count"] = state.get("retry_count", 0) + 1
+        state["messages"].append(
+            ToolMessage(content=str(result), tool_call_id=tool_call["id"])
+        )
 
-    state["tool_result"] = str(result)
+        # Extract metadata for frontend badges
+        if "order_id" in tool_args:
+            state["order_id"] = tool_args["order_id"]
+        if tool_name in TOOL_INTENT_MAP:
+            state["intent"] = TOOL_INTENT_MAP[tool_name]
+
     return state
 
 
 def escalation_check(state: AgentState) -> AgentState:
-    last_message = state["messages"][-1].content.lower()
+    """Check if the conversation should be escalated to a human."""
+    human_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
+    if not human_messages:
+        return state
+
+    last_message = human_messages[-1].content.lower()
     anger_words = ["angry", "furious", "terrible", "worst", "useless", "refund now", "escalate"]
 
     anger_count = state.get("anger_count", 0)
@@ -116,7 +95,9 @@ def escalation_check(state: AgentState) -> AgentState:
     state["refund_amount"] = refund_amount
     return state
 
+
 def escalate(state: AgentState) -> AgentState:
+    """Escalate to a human agent by creating a support ticket."""
     messages = state.get("messages", [])
     already_escalated = any("TKT-" in m.content for m in messages if isinstance(m, AIMessage))
 
@@ -128,23 +109,4 @@ def escalate(state: AgentState) -> AgentState:
         reply = f"I've escalated your case to a human agent. {result['message']} Ticket ID: {ticket_id}"
 
     state["messages"].append(AIMessage(content=reply))
-    return state
-
-def respond(state: AgentState) -> AgentState:
-    current_intent = state.get("intent", "unclear")
-    tool_result = state.get("tool_result", None)
-
-    if current_intent == "unclear" or tool_result is None:
-        context = "No tool result available. Respond helpfully based on the message alone."
-    else:
-        context = f"Tool result: {tool_result}"
-
-    # Build messages with conversation history (last 6 messages = up to 3 turns)
-    messages = [SystemMessage(content=RESPONSE_SYSTEM_PROMPT)]
-    history = state["messages"][-6:]  # keep context window small to control cost
-    messages.extend(history)
-    messages.append(SystemMessage(content=context))
-
-    response = llm.invoke(messages)
-    state["messages"].append(AIMessage(content=response.content))
     return state
