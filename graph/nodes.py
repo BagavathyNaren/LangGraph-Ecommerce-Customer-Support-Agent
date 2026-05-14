@@ -36,6 +36,11 @@ TOOL_INTENT_MAP = {
 
 def agent_node(state: AgentState) -> AgentState:
     """The agent LLM decides what to do — call tools or respond directly."""
+    # Reset metadata at the start of a new user turn (not during ReAct tool loop)
+    if isinstance(state["messages"][-1], HumanMessage):
+        state["intent"] = None
+        state["order_id"] = None
+
     messages = [SystemMessage(content=AGENT_SYSTEM_PROMPT)] + state["messages"]
     response = agent_llm.invoke(messages)
     state["messages"].append(response)
