@@ -61,11 +61,14 @@ def send_telegram_sync(chat_id: str, message: str):
     logger.info(f"Attempting Telegram via token {masked_token} to chat {chat_id}", extra={"event": "telegram_attempt"})
     
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     data = {"chat_id": chat_id, "text": message}
     
     try:
-        # Try with a longer timeout and verify the endpoint
-        response = requests.post(url, json=data, timeout=25)
+        # Try with a longer timeout and browser-like headers
+        response = requests.post(url, json=data, headers=headers, timeout=25)
         response.raise_for_status()
         logger.info(f"Telegram message sent to {chat_id}", extra={"event": "telegram_sent", "chat_id": chat_id})
     except Exception as e:
