@@ -28,6 +28,7 @@ def send_email_sync(to_email: str, subject: str, body: str):
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
+        logger.info(f"Attempting email to {to_email} via port {smtp_port}...", extra={"event": "email_attempt", "port": smtp_port})
         if int(smtp_port) == 465:
             with smtplib.SMTP_SSL(smtp_server, int(smtp_port)) as server:
                 server.login(smtp_user, smtp_pass)
@@ -38,9 +39,10 @@ def send_email_sync(to_email: str, subject: str, body: str):
                 server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
             
-        logger.info(f"Email successfully sent to {to_email}", extra={"event": "email_sent", "to": to_email})
+        logger.info(f"Email successfully sent to {to_email}", extra={"event": "email_sent", "to": to_email, "port": smtp_port})
     except Exception as e:
-        logger.error(f"Failed to send email to {to_email}", extra={"event": "email_failed", "error": str(e), "to": to_email})
+        logger.error(f"Failed to send email to {to_email} via port {smtp_port}", 
+                     extra={"event": "email_failed", "error": str(e), "to": to_email, "port": smtp_port})
 
 def send_email(to_email: str, subject: str, body: str):
     """Asynchronously send an email without blocking the main thread."""
