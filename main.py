@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from cache.redis_cache import get_cached_response, set_cached_response
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, field_validator, Field
@@ -126,7 +126,7 @@ def health():
     }
 
 @app.post("/chat")
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     start = time.time()
     request_id = str(uuid.uuid4())[:8]
 
@@ -178,6 +178,16 @@ def chat(request: ChatRequest):
         if not pii_detected and not result.get("escalated", False):
             set_cached_response(validated_message, response_data, request.thread_id)
 
+        from tools.logging_tools import log_conversation
+        background_tasks.add_task(
+            log_conversation,
+            request.thread_id,
+            validated_message,
+            safe_response,
+            result.get("intent"),
+            result.get("order_id")
+        )
+
         duration_ms = round((time.time() - start) * 1000)
         logger.info("Chat request completed", extra={
             "event": "chat_response",
@@ -210,7 +220,7 @@ def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail="Internal agent error.")
 
 @app.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
     message = request.message
     thread_id = request.thread_id
     try:
@@ -247,6 +257,15 @@ async def chat_stream(request: ChatRequest):
                         yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
                         await asyncio.sleep(0.04)
                     yield f"data: {json.dumps({'done': True, 'intent': cached.get('intent'), 'escalated': cached.get('escalated', False), 'order_id': cached.get('order_id'), 'cache_hit': True})}\n\n"
+                    from tools.logging_tools import log_conversation
+                    background_tasks.add_task(
+                        log_conversation,
+                        thread_id,
+                        validated_message,
+                        cached["response"],
+                        cached.get("intent"),
+                        cached.get("order_id")
+                    )
                     return
 
             config = {"configurable": {"thread_id": thread_id}}
@@ -284,6 +303,17 @@ async def chat_stream(request: ChatRequest):
                 "pii_detected": pii_detected,
                 "duration_ms": duration_ms
             })
+            
+            from tools.logging_tools import log_conversation
+            background_tasks.add_task(
+                log_conversation,
+                thread_id,
+                validated_message,
+                response,
+                result.get("intent"),
+                result.get("order_id")
+            )
+            
             yield f"data: {json.dumps({'done': True, 'intent': result.get('intent'), 'escalated': result.get('escalated', False), 'order_id': result.get('order_id'), 'cache_hit': False})}\n\n"
 
         except Exception as e:
@@ -295,7 +325,7 @@ async def chat_stream(request: ChatRequest):
             })
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(generate(), media_type="text/event-stream", background=background_tasks)
 
 @app.post("/evaluate")
 def evaluate(x_api_key: str = Header(None)):
