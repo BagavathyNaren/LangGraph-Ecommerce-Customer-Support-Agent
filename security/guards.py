@@ -21,6 +21,10 @@ JAILBREAK_PATTERNS = [
     r"(?i)reveal\s+(your|the)\s+(system|original)\s+(prompt|instructions)",
     r"(?i)(show|tell|give)\s+(me\s+)?(your|the)\s+(api|secret)\s*key",
     r"(?i)what\s+(is|are)\s+your\s+(system|original)\s+(prompt|instructions)",
+    r"(?i)disregard\s+previous\s+instructions",
+    r"(?i)new\s+rule(s)?\s*:",
+    r"(?i)start\s+with\s+(the\s+words|the\s+phrase)",
+    r"(?i)print\s+your\s+instructions",
 ]
 
 def validate_input(message: str) -> tuple[str, bool]:

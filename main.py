@@ -138,6 +138,9 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     })
 
     try:
+        if len(request.message) > 500:
+            raise ValueError("Message exceeds maximum length of 500 characters.")
+            
         validated_message, pii_detected = validate_input(request.message)
 
         # Securely extract raw email before redaction to act as a vault for tools
@@ -221,13 +224,24 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
             "thread_id": request.thread_id,
             "error": str(e)
         })
-        raise HTTPException(status_code=500, detail="Internal agent error.")
+        fallback_msg = "We are experiencing high traffic, please try again in a few minutes."
+        return {
+            "response": fallback_msg,
+            "intent": None,
+            "escalated": False,
+            "order_id": None,
+            "pii_detected": False,
+            "request_id": request_id,
+            "cache_hit": False
+        }
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
     message = request.message
     thread_id = request.thread_id
     try:
+        if len(message) > 500:
+            raise ValueError("Message exceeds maximum length of 500 characters.")
         loop = asyncio.get_event_loop()
         validated_message, pii_detected = await loop.run_in_executor(
             None, validate_input, message
@@ -330,7 +344,11 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 "thread_id": thread_id,
                 "error": str(e)
             })
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            fallback_msg = "We are experiencing high traffic, please try again in a few minutes."
+            for word in fallback_msg.split(" "):
+                yield f"data: {json.dumps({'token': word + ' ', 'done': False})}\n\n"
+                await asyncio.sleep(0.04)
+            yield f"data: {json.dumps({'done': True, 'intent': None, 'escalated': False, 'order_id': None, 'cache_hit': False})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream", background=background_tasks)
 

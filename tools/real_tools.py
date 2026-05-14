@@ -81,6 +81,22 @@ def initiate_return(order_id: str, reason: str) -> dict:
                     INSERT INTO refunds (refund_id, order_id, amount, status, eta)
                     VALUES (%s, %s, %s, 'pending', %s)
                 """, (refund_id, order_id, amount, eta))
+                
+                # Notification
+                cur.execute("""
+                    SELECT c.email, c.name FROM customers c 
+                    JOIN orders o ON c.customer_id = o.customer_id 
+                    WHERE o.order_id = %s
+                """, (order_id,))
+                cust_row = cur.fetchone()
+                if cust_row and cust_row[0]:
+                    from tools.notifications import send_email
+                    send_email(
+                        to_email=cust_row[0], 
+                        subject=f"Return Initiated: {order_id}", 
+                        body=f"Hi {cust_row[1]},\n\nWe have initiated a return for order {order_id}. Your refund ID is {refund_id} for the amount of ${amount:.2f}. Pickup is scheduled within 2-3 days."
+                    )
+                    
                 conn.commit()
 
                 return {
@@ -103,6 +119,22 @@ def cancel_order(order_id: str) -> dict:
                 if row[0] in ("delivered", "cancelled"):
                     return {"success": False, "message": f"Order {order_id} cannot be cancelled — status is {row[0]}."}
                 cur.execute("UPDATE orders SET status = 'cancelled' WHERE order_id = %s", (order_id,))
+                
+                # Notification
+                cur.execute("""
+                    SELECT c.email, c.name FROM customers c 
+                    JOIN orders o ON c.customer_id = o.customer_id 
+                    WHERE o.order_id = %s
+                """, (order_id,))
+                cust_row = cur.fetchone()
+                if cust_row and cust_row[0]:
+                    from tools.notifications import send_email
+                    send_email(
+                        to_email=cust_row[0], 
+                        subject=f"Order Cancelled: {order_id}", 
+                        body=f"Hi {cust_row[1]},\n\nYour order {order_id} has been successfully cancelled."
+                    )
+
                 conn.commit()
                 return {"success": True, "message": f"Order {order_id} cancelled successfully."}
     except Exception as e:
@@ -142,7 +174,7 @@ def get_customer_orders(customer_name: str) -> dict:
         logger.error("DB error in get_customer_orders", extra={"event": "db_error", "error": str(e), "query": customer_name})
         return {"error": USER_FRIENDLY_DB_ERROR}
 
-def register_new_customer(name: str, email: str, phone: str = None) -> dict:
+def register_new_customer(name: str, email: str) -> dict:
     """Register a new customer in the database."""
     import uuid
     try:
@@ -156,9 +188,9 @@ def register_new_customer(name: str, email: str, phone: str = None) -> dict:
                 customer_id = f"CUST-{uuid.uuid4().hex[:6].upper()}"
                 
                 cur.execute("""
-                    INSERT INTO customers (customer_id, name, email, phone)
-                    VALUES (%s, %s, %s, %s)
-                """, (customer_id, name, email, phone))
+                    INSERT INTO customers (customer_id, name, email)
+                    VALUES (%s, %s, %s)
+                """, (customer_id, name, email))
                 conn.commit()
                 
                 return {
@@ -227,6 +259,19 @@ def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, messag
                     INSERT INTO support_tickets (ticket_id, customer_id, order_id, issue_type, message)
                     VALUES (%s, %s, %s, %s, %s)
                 """, (ticket_id, customer_id, order_id, issue_type, message))
+                
+                # Notification
+                if customer_id:
+                    cur.execute("SELECT email, name FROM customers WHERE customer_id = %s", (customer_id,))
+                    cust_row = cur.fetchone()
+                    if cust_row and cust_row[0]:
+                        from tools.notifications import send_email
+                        send_email(
+                            to_email=cust_row[0], 
+                            subject=f"Support Ticket Created: {ticket_id}", 
+                            body=f"Hi {cust_row[1]},\n\nWe received your support request regarding order {order_id}. Ticket ID: {ticket_id}.\n\nA human agent will review your case and contact you within 2 hours."
+                        )
+
                 conn.commit()
                 return {"success": True, "message": "A human agent will review your case and contact you within 2 hours."}
     except Exception as e:
