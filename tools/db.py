@@ -13,6 +13,7 @@ def get_pool() -> ConnectionPool:
             open=True,
             max_idle=60,
             reconnect_timeout=30,
+            check=ConnectionPool.check_connection,  # validates connection is alive before returning
             kwargs={"autocommit": True, "connect_timeout": 10}
         )
     return _pool
