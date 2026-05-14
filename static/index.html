@@ -167,7 +167,7 @@
                 const data = JSON.parse(trimmed.slice(6));
                 if (data.token) {
                   fullText += data.token;
-                  document.getElementById('streaming-bubble').innerHTML = fullText + '<span class="cursor"></span>';
+                  document.getElementById('streaming-bubble').innerHTML = renderMarkdown(fullText) + '<span class="cursor"></span>';
                   messages.scrollTop = messages.scrollHeight;
                 }
                 if (data.done) {
