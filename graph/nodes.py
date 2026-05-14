@@ -4,7 +4,8 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from graph.state import AgentState
 from tools.real_tools import (
     get_order_status, initiate_return, get_refund_status,
-    cancel_order, search_knowledge_base, create_support_ticket
+    cancel_order, search_knowledge_base, create_support_ticket,
+    get_customer_orders
 )
 import uuid
 import json
@@ -19,10 +20,11 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True, request_tim
 classifier_llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0, timeout=15)
 
 INTENT_SYSTEM_PROMPT = """You are an intent classifier for an e-commerce support agent.
-Extract the intent and order_id from the customer message.
+Extract the intent, order_id, and customer_name from the customer message.
 Return ONLY valid JSON. No extra text, no markdown, no explanation.
-Format: {"intent": "<intent>", "order_id": "<order_id or null>"}
-Valid intents: order_status, return_request, refund_status, cancel_order, unclear"""
+Format: {"intent": "<intent>", "order_id": "<order_id or null>", "customer_name": "<name or email or null>"}
+Valid intents: order_status, return_request, refund_status, cancel_order, customer_lookup, unclear
+Use customer_lookup when the user asks about their orders by providing their name or email instead of an order ID."""
 
 RESPONSE_SYSTEM_PROMPT = """You are an e-commerce customer support agent.
 You ONLY handle: order status, returns, refunds, cancellations.
@@ -49,12 +51,22 @@ def classify_intent(state: AgentState) -> AgentState:
         data = json.loads(raw)
         state["intent"] = data.get("intent", "unclear")
         state["order_id"] = data.get("order_id") or state.get("order_id")
+        if data.get("customer_name"):
+            state["customer_name"] = data["customer_name"]
     except json.JSONDecodeError:
         state["intent"] = "unclear"
     return state
 
 def handle_tool(state: AgentState) -> AgentState:
     intent = state["intent"]
+
+    # Customer lookup doesn't need an order ID
+    if intent == "customer_lookup":
+        customer_name = state.get("customer_name", "UNKNOWN")
+        result = get_customer_orders(customer_name)
+        state["tool_result"] = str(result)
+        return state
+
     order_id = state.get("order_id") or "UNKNOWN"
 
     # Validate order_id format before querying DB
