@@ -1,3 +1,4 @@
+import requests
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -44,19 +45,30 @@ def send_email(to_email: str, subject: str, body: str):
     thread.daemon = True
     thread.start()
 
-def send_telegram(chat_id: str, message: str):
-    """Placeholder for Telegram integration."""
+def send_telegram_sync(chat_id: str, message: str):
+    """Synchronous internal function to send Telegram message or fallback to logger."""
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    
     if not bot_token:
         logger.info(f"TELEGRAM NOTIFICATION [MOCK]\nTo Chat: {chat_id}\nMessage: {message}", 
                     extra={"event": "telegram_mock_sent", "chat_id": chat_id})
         return
     
-    # Example implementation (requires requests)
-    # import requests
-    # url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    # data = {"chat_id": chat_id, "text": message}
-    # try:
-    #     requests.post(url, json=data, timeout=5)
-    # except Exception as e:
-    #     logger.error("Telegram send failed", extra={"error": str(e)})
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    data = {"chat_id": chat_id, "text": message}
+    
+    try:
+        response = requests.post(url, json=data, timeout=5)
+        response.raise_for_status()
+        logger.info(f"Telegram message sent to {chat_id}", extra={"event": "telegram_sent", "chat_id": chat_id})
+    except Exception as e:
+        logger.error(f"Failed to send Telegram message to {chat_id}", 
+                     extra={"event": "telegram_failed", "error": str(e), "chat_id": chat_id})
+
+def send_telegram(chat_id: str, message: str):
+    """Asynchronously send a Telegram message without blocking the main thread."""
+    if not chat_id:
+        return
+    thread = threading.Thread(target=send_telegram_sync, args=(chat_id, message))
+    thread.daemon = True
+    thread.start()

@@ -84,18 +84,27 @@ def initiate_return(order_id: str, reason: str) -> dict:
                 
                 # Notification
                 cur.execute("""
-                    SELECT c.email, c.name FROM customers c 
+                    SELECT c.email, c.name, c.telegram_chat_id FROM customers c 
                     JOIN orders o ON c.customer_id = o.customer_id 
                     WHERE o.order_id = %s
                 """, (order_id,))
                 cust_row = cur.fetchone()
-                if cust_row and cust_row[0]:
-                    from tools.notifications import send_email
-                    send_email(
-                        to_email=cust_row[0], 
-                        subject=f"Return Initiated: {order_id}", 
-                        body=f"Hi {cust_row[1]},\n\nWe have initiated a return for order {order_id}. Your refund ID is {refund_id} for the amount of ${amount:.2f}. Pickup is scheduled within 2-3 days."
-                    )
+                if cust_row:
+                    email, name, telegram_id = cust_row
+                    from tools.notifications import send_email, send_telegram
+                    
+                    if email:
+                        send_email(
+                            to_email=email, 
+                            subject=f"Return Initiated: {order_id}", 
+                            body=f"Hi {name},\n\nWe have initiated a return for order {order_id}. Your refund ID is {refund_id} for the amount of ${amount:.2f}."
+                        )
+                    
+                    if telegram_id:
+                        send_telegram(
+                            chat_id=telegram_id,
+                            message=f"📦 Return Initiated!\nOrder: {order_id}\nRefund ID: {refund_id}\nAmount: ${amount:.2f}"
+                        )
                     
                 conn.commit()
 
@@ -122,18 +131,27 @@ def cancel_order(order_id: str) -> dict:
                 
                 # Notification
                 cur.execute("""
-                    SELECT c.email, c.name FROM customers c 
+                    SELECT c.email, c.name, c.telegram_chat_id FROM customers c 
                     JOIN orders o ON c.customer_id = o.customer_id 
                     WHERE o.order_id = %s
                 """, (order_id,))
                 cust_row = cur.fetchone()
-                if cust_row and cust_row[0]:
-                    from tools.notifications import send_email
-                    send_email(
-                        to_email=cust_row[0], 
-                        subject=f"Order Cancelled: {order_id}", 
-                        body=f"Hi {cust_row[1]},\n\nYour order {order_id} has been successfully cancelled."
-                    )
+                if cust_row:
+                    email, name, telegram_id = cust_row
+                    from tools.notifications import send_email, send_telegram
+                    
+                    if email:
+                        send_email(
+                            to_email=email, 
+                            subject=f"Order Cancelled: {order_id}", 
+                            body=f"Hi {name},\n\nYour order {order_id} has been successfully cancelled."
+                        )
+                    
+                    if telegram_id:
+                        send_telegram(
+                            chat_id=telegram_id,
+                            message=f"❌ Order Cancelled!\nOrder ID: {order_id}"
+                        )
 
                 conn.commit()
                 return {"success": True, "message": f"Order {order_id} cancelled successfully."}
@@ -262,15 +280,24 @@ def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, messag
                 
                 # Notification
                 if customer_id:
-                    cur.execute("SELECT email, name FROM customers WHERE customer_id = %s", (customer_id,))
+                    cur.execute("SELECT email, name, telegram_chat_id FROM customers WHERE customer_id = %s", (customer_id,))
                     cust_row = cur.fetchone()
-                    if cust_row and cust_row[0]:
-                        from tools.notifications import send_email
-                        send_email(
-                            to_email=cust_row[0], 
-                            subject=f"Support Ticket Created: {ticket_id}", 
-                            body=f"Hi {cust_row[1]},\n\nWe received your support request regarding order {order_id}. Ticket ID: {ticket_id}.\n\nA human agent will review your case and contact you within 2 hours."
-                        )
+                    if cust_row:
+                        email, name, telegram_id = cust_row
+                        from tools.notifications import send_email, send_telegram
+                        
+                        if email:
+                            send_email(
+                                to_email=email, 
+                                subject=f"Support Ticket Created: {ticket_id}", 
+                                body=f"Hi {name},\n\nWe received your support request regarding order {order_id}. Ticket ID: {ticket_id}."
+                            )
+                        
+                        if telegram_id:
+                            send_telegram(
+                                chat_id=telegram_id,
+                                message=f"🚨 Ticket Created!\nID: {ticket_id}\nOrder: {order_id}\nIssue: {issue_type}"
+                            )
 
                 conn.commit()
                 return {"success": True, "message": "A human agent will review your case and contact you within 2 hours."}
