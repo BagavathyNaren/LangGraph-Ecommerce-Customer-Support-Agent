@@ -1,5 +1,10 @@
 import os
 from tools.db import get_connection
+from logger import get_logger
+
+logger = get_logger("tools")
+
+USER_FRIENDLY_DB_ERROR = "We're experiencing a temporary issue. Please try again in a moment."
 
 def get_order_status(order_id: str) -> dict:
     try:
@@ -20,7 +25,8 @@ def get_order_status(order_id: str) -> dict:
                     "expected_delivery": str(row[3])
                 }
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("DB error in get_order_status", extra={"event": "db_error", "error": str(e), "order_id": order_id})
+        return {"error": USER_FRIENDLY_DB_ERROR}
 
 def get_refund_status(order_id: str) -> dict:
     try:
@@ -42,7 +48,8 @@ def get_refund_status(order_id: str) -> dict:
                     "eta": row[3]
                 }
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("DB error in get_refund_status", extra={"event": "db_error", "error": str(e), "order_id": order_id})
+        return {"error": USER_FRIENDLY_DB_ERROR}
 
 def initiate_return(order_id: str, reason: str) -> dict:
     try:
@@ -60,7 +67,8 @@ def initiate_return(order_id: str, reason: str) -> dict:
                     "message": "Return initiated. Pickup scheduled within 2-3 days."
                 }
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("DB error in initiate_return", extra={"event": "db_error", "error": str(e), "order_id": order_id})
+        return {"error": USER_FRIENDLY_DB_ERROR}
 
 def cancel_order(order_id: str) -> dict:
     try:
@@ -76,7 +84,8 @@ def cancel_order(order_id: str) -> dict:
                 conn.commit()
                 return {"success": True, "message": f"Order {order_id} cancelled successfully."}
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("DB error in cancel_order", extra={"event": "db_error", "error": str(e), "order_id": order_id})
+        return {"error": USER_FRIENDLY_DB_ERROR}
 
 def search_knowledge_base(query: str) -> dict:
     return {"answer": f"Based on our policy regarding '{query}': please allow 5-7 business days for processing. Contact support for urgent cases."}
