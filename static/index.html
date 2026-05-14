@@ -171,6 +171,9 @@
     }
 
     // Finalize bubble
+    if (!fullText || fullText.trim() === '') {
+      fullText = 'Sorry, I could not process your request. Please try asking about an order status, return, refund, or cancellation.';
+    }
     const bubble = document.getElementById('streaming-bubble');
     const isEscalated = metadata.escalated === true;
     if (bubble) bubble.className = isEscalated ? 'bubble escalated' : 'bubble';
