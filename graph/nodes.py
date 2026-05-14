@@ -67,7 +67,7 @@ def tool_node(state: AgentState) -> AgentState:
             duration_ms = round((time.time() - start) * 1000)
             logger.info("Tool executed (cached)", extra={
                 "event": "tool_cached", "tool": tool_name,
-                "args": tool_args, "duration_ms": duration_ms
+                "tool_args": tool_args, "duration_ms": duration_ms
             })
         else:
             tool_fn = tool_map.get(tool_name)
@@ -81,7 +81,7 @@ def tool_node(state: AgentState) -> AgentState:
             duration_ms = round((time.time() - start) * 1000)
             logger.info("Tool executed (live)", extra={
                 "event": "tool_live", "tool": tool_name,
-                "args": tool_args, "duration_ms": duration_ms
+                "tool_args": tool_args, "duration_ms": duration_ms
             })
 
         state["messages"].append(
