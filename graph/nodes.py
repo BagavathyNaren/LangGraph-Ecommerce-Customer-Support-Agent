@@ -48,19 +48,41 @@ def agent_node(state: AgentState) -> AgentState:
 
 
 def tool_node(state: AgentState) -> AgentState:
-    """Execute tool calls from the agent's last response."""
+    """Execute tool calls from the agent's last response, with Redis caching."""
+    from cache.redis_cache import get_cached_tool_result, set_cached_tool_result
+    import time
+
     last_message = state["messages"][-1]
     tool_map = {t.name: t for t in AGENT_TOOLS}
 
     for tool_call in last_message.tool_calls:
         tool_name = tool_call["name"]
         tool_args = tool_call["args"]
+        start = time.time()
 
-        tool_fn = tool_map.get(tool_name)
-        if tool_fn:
-            result = tool_fn.invoke(tool_args)
+        # Check tool cache first
+        cached = get_cached_tool_result(tool_name, tool_args)
+        if cached:
+            result = cached
+            duration_ms = round((time.time() - start) * 1000)
+            logger.info("Tool executed (cached)", extra={
+                "event": "tool_cached", "tool": tool_name,
+                "args": tool_args, "duration_ms": duration_ms
+            })
         else:
-            result = f"Tool {tool_name} not found."
+            tool_fn = tool_map.get(tool_name)
+            if tool_fn:
+                result = tool_fn.invoke(tool_args)
+                # Cache the result (skip if it contains an error)
+                if "error" not in str(result).lower() or "not_found" in str(result).lower():
+                    set_cached_tool_result(tool_name, tool_args, str(result))
+            else:
+                result = f"Tool {tool_name} not found."
+            duration_ms = round((time.time() - start) * 1000)
+            logger.info("Tool executed (live)", extra={
+                "event": "tool_live", "tool": tool_name,
+                "args": tool_args, "duration_ms": duration_ms
+            })
 
         state["messages"].append(
             ToolMessage(content=str(result), tool_call_id=tool_call["id"])

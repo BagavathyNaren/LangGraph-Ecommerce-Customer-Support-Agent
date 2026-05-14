@@ -48,3 +48,39 @@ def set_cached_response(message: str, response: dict, thread_id: str = "global")
         logger.info("Cache set", extra={"event": "cache_set"})
     except Exception as e:
         logger.warning("Cache set failed", extra={"event": "cache_error", "error": str(e)})
+
+# --- Tool-level caching ---
+TOOL_CACHE_TTL = 120  # 2 minutes — short TTL for data freshness
+
+def make_tool_cache_key(tool_name: str, args: dict) -> str:
+    """Create a cache key from tool name + sorted args."""
+    args_str = json.dumps(args, sort_keys=True).lower().strip()
+    return "tool:v1:" + hashlib.sha256(f"{tool_name}:{args_str}".encode()).hexdigest()
+
+def get_cached_tool_result(tool_name: str, args: dict) -> str | None:
+    if r is None:
+        return None
+    try:
+        key = make_tool_cache_key(tool_name, args)
+        value = r.get(key)
+        if value:
+            logger.info("Tool cache hit", extra={
+                "event": "tool_cache_hit", "tool": tool_name
+            })
+            return value
+        return None
+    except Exception as e:
+        logger.warning("Tool cache get failed", extra={"event": "tool_cache_error", "error": str(e)})
+        return None
+
+def set_cached_tool_result(tool_name: str, args: dict, result: str) -> None:
+    if r is None:
+        return
+    try:
+        key = make_tool_cache_key(tool_name, args)
+        r.setex(key, TOOL_CACHE_TTL, result)
+        logger.info("Tool cache set", extra={
+            "event": "tool_cache_set", "tool": tool_name
+        })
+    except Exception as e:
+        logger.warning("Tool cache set failed", extra={"event": "tool_cache_error", "error": str(e)})
