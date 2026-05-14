@@ -28,10 +28,15 @@ def send_email_sync(to_email: str, subject: str, body: str):
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
-        with smtplib.SMTP(smtp_server, int(smtp_port)) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
+        if int(smtp_port) == 465:
+            with smtplib.SMTP_SSL(smtp_server, int(smtp_port)) as server:
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_server, int(smtp_port)) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
             
         logger.info(f"Email successfully sent to {to_email}", extra={"event": "email_sent", "to": to_email})
     except Exception as e:
