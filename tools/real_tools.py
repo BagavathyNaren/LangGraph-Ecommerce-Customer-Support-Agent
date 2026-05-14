@@ -52,6 +52,8 @@ def get_refund_status(order_id: str) -> dict:
         return {"error": USER_FRIENDLY_DB_ERROR}
 
 def initiate_return(order_id: str, reason: str) -> dict:
+    import uuid
+    import random
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -61,10 +63,30 @@ def initiate_return(order_id: str, reason: str) -> dict:
                     return {"success": False, "message": f"Order {order_id} not found."}
                 if row[0] != "delivered":
                     return {"success": False, "message": f"Order {order_id} cannot be returned — status is {row[0]}."}
+                
+                # Check if refund already exists
+                cur.execute("SELECT refund_id FROM refunds WHERE order_id = %s", (order_id,))
+                if cur.fetchone():
+                    return {"success": False, "message": f"A return/refund is already being processed for order {order_id}."}
+
+                # Update order status
+                cur.execute("UPDATE orders SET status = 'returned' WHERE order_id = %s", (order_id,))
+                
+                # Generate new refund record
+                refund_id = f"REF-{uuid.uuid4().hex[:6].upper()}"
+                amount = round(random.uniform(50.0, 500.0), 2)  # Demo dynamic pricing
+                eta = "3-5 business days"
+                
+                cur.execute("""
+                    INSERT INTO refunds (refund_id, order_id, amount, status, eta)
+                    VALUES (%s, %s, %s, 'pending', %s)
+                """, (refund_id, order_id, amount, eta))
+                conn.commit()
+
                 return {
                     "success": True,
                     "return_id": f"RET-{order_id}",
-                    "message": "Return initiated. Pickup scheduled within 2-3 days."
+                    "message": f"Return initiated successfully. Refund ID: {refund_id}. Pickup scheduled within 2-3 days."
                 }
     except Exception as e:
         logger.error("DB error in initiate_return", extra={"event": "db_error", "error": str(e), "order_id": order_id})
