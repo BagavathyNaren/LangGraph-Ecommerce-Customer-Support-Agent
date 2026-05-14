@@ -60,7 +60,7 @@ def send_telegram_sync(chat_id: str, message: str):
     data = {"chat_id": chat_id, "text": message}
     
     try:
-        response = requests.post(url, json=data, timeout=5)
+        response = requests.post(url, json=data, timeout=15)
         response.raise_for_status()
         logger.info(f"Telegram message sent to {chat_id}", extra={"event": "telegram_sent", "chat_id": chat_id})
     except Exception as e:
