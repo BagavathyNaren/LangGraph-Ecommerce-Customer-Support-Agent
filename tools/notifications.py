@@ -1,7 +1,4 @@
 import requests
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import os
 import threading
 from logger import get_logger
@@ -9,40 +6,38 @@ from logger import get_logger
 logger = get_logger("notifications")
 
 def send_email_sync(to_email: str, subject: str, body: str):
-    """Synchronous internal function to send email or fallback to logger."""
-    smtp_server = os.environ.get("SMTP_SERVER")
-    smtp_port = os.environ.get("SMTP_PORT")
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_pass = os.environ.get("SMTP_PASS")
+    """Synchronous internal function to send email via Resend API or fallback to logger."""
+    api_key = os.environ.get("RESEND_API_KEY")
 
-    if not all([smtp_server, smtp_port, smtp_user, smtp_pass]):
-        # Fallback to logger if credentials are missing
+    if not api_key:
+        # Fallback to logger if API key is missing
         logger.info(f"EMAIL NOTIFICATION [MOCK]\nTo: {to_email}\nSubject: {subject}\nBody: {body}", 
                     extra={"event": "email_mock_sent", "to": to_email})
         return
 
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = smtp_user
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    # Using 'onboarding@resend.dev' as the default 'from' for the free tier
+    data = {
+        "from": "Support <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": subject,
+        "text": body
+    }
 
-        logger.info(f"Attempting email to {to_email} via port {smtp_port}...", extra={"event": "email_attempt", "port": smtp_port})
-        if int(smtp_port) == 465:
-            with smtplib.SMTP_SSL(smtp_server, int(smtp_port)) as server:
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
+    try:
+        response = requests.post(url, json=data, headers=headers, timeout=10)
+        if response.status_code == 201 or response.status_code == 200:
+            logger.info(f"Email successfully sent to {to_email} via Resend", extra={"event": "email_sent", "to": to_email})
         else:
-            with smtplib.SMTP(smtp_server, int(smtp_port)) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-            
-        logger.info(f"Email successfully sent to {to_email}", extra={"event": "email_sent", "to": to_email, "port": smtp_port})
+            logger.error(f"Resend API error: {response.status_code} - {response.text}", 
+                         extra={"event": "email_api_error", "status": response.status_code, "to": to_email})
     except Exception as e:
-        logger.error(f"Failed to send email to {to_email} via port {smtp_port}", 
-                     extra={"event": "email_failed", "error": str(e), "to": to_email, "port": smtp_port})
+        logger.error(f"Failed to send email to {to_email} via Resend", 
+                     extra={"event": "email_failed", "error": str(e), "to": to_email})
 
 def send_email(to_email: str, subject: str, body: str):
     """Asynchronously send an email without blocking the main thread."""
