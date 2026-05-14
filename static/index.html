@@ -78,6 +78,20 @@
     return div.innerHTML;
   }
 
+  function renderMarkdown(text) {
+    // Escape HTML first for safety, then convert markdown to HTML
+    let html = escapeHtml(text);
+    // Bold: **text** → <strong>text</strong>
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Numbered list items: "1. text" at start of line → formatted list item
+    html = html.replace(/^(\d+)\.\s+/gm, '<br><strong>$1.</strong> ');
+    // Line breaks
+    html = html.replace(/\n/g, '<br>');
+    // Clean up leading <br>
+    html = html.replace(/^(<br>)+/, '');
+    return html;
+  }
+
   function newSession() {
     threadId = generateId();
     document.getElementById('thread-id').textContent = threadId;
@@ -177,7 +191,7 @@
     const bubble = document.getElementById('streaming-bubble');
     const isEscalated = metadata.escalated === true;
     if (bubble) bubble.className = isEscalated ? 'bubble escalated' : 'bubble';
-    if (bubble) bubble.textContent = fullText;
+    if (bubble) bubble.innerHTML = renderMarkdown(fullText);
     if (bubble) bubble.removeAttribute('id');
     // Build badges
     const badges = [];
