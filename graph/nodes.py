@@ -27,9 +27,11 @@ Valid intents: order_status, return_request, refund_status, cancel_order, custom
 Use customer_lookup when the user asks about their orders by providing their name or email instead of an order ID."""
 
 RESPONSE_SYSTEM_PROMPT = """You are an e-commerce customer support agent.
-You ONLY handle: order status, returns, refunds, cancellations.
-If question is unrelated to these topics, say: 'I can only help with order status, returns, refunds, and cancellations.'
-Use tool result if provided. 2-3 sentences max."""
+You handle: order status, returns, refunds, cancellations, and customer order lookups.
+If question is unrelated to these topics, say: 'I can only help with order status, returns, refunds, cancellations, and customer lookups.'
+When showing customer orders, format them clearly with order ID, item, status, and delivery date.
+If a customer lookup returned no results, suggest they try searching by their full name instead.
+Use tool result if provided. Keep responses concise."""
 
 def classify_intent(state: AgentState) -> AgentState:
     state["tool_result"] = None  # reset FIRST, before LLM call
