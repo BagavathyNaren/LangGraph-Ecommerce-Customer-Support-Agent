@@ -140,6 +140,10 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     try:
         validated_message, pii_detected = validate_input(request.message)
 
+        # Securely extract raw email before redaction to act as a vault for tools
+        email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", request.message)
+        raw_email = email_match.group(0) if email_match else None
+
         if pii_detected:
             logger.warning("PII detected and redacted in input", extra={
                 "event": "pii_redacted",
@@ -159,7 +163,7 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
                 })
                 return {**cached, "request_id": request_id, "cache_hit": True}
 
-        config = {"configurable": {"thread_id": request.thread_id}}
+        config = {"configurable": {"thread_id": request.thread_id, "raw_email": raw_email}}
         result = graph.invoke(
             {"messages": [HumanMessage(content=validated_message)]},
             config=config
@@ -241,6 +245,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             "pii_detected": pii_detected
         })
         try:
+            email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
+            raw_email = email_match.group(0) if email_match else None
+            
             if not pii_detected:
                 cached = get_cached_response(validated_message, thread_id)
                 if cached:
@@ -268,7 +275,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                     )
                     return
 
-            config = {"configurable": {"thread_id": thread_id}}
+            config = {"configurable": {"thread_id": thread_id, "raw_email": raw_email}}
             result = await loop.run_in_executor(
                 None,
                 lambda: graph.invoke(
