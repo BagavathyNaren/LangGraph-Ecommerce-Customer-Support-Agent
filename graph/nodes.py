@@ -132,7 +132,14 @@ def escalate(state: AgentState) -> AgentState:
         reply = "Your case is already escalated. A human agent will contact you soon."
     else:
         ticket_id = f"TKT-{uuid.uuid4().hex[:6].upper()}"
-        result = create_support_ticket(str(state.get("tool_result", "")))
+        order_id = state.get("order_id")
+        
+        # Summarize the conversation to provide context for the human agent
+        history_lines = [f"{'User' if isinstance(m, HumanMessage) else 'Agent'}: {m.content}" 
+                         for m in messages[-4:] if isinstance(m, (HumanMessage, AIMessage))]
+        history = "\n".join(history_lines)
+        
+        result = create_support_ticket(ticket_id, order_id, "Automated Escalation", history)
         reply = f"I've escalated your case to a human agent. {result['message']} Ticket ID: {ticket_id}"
 
     state["messages"].append(AIMessage(content=reply))

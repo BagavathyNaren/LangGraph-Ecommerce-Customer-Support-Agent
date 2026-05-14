@@ -123,7 +123,23 @@ def get_customer_orders(customer_name: str) -> dict:
 def search_knowledge_base(query: str) -> dict:
     return {"answer": f"Based on our policy regarding '{query}': please allow 5-7 business days for processing. Contact support for urgent cases."}
 
-def create_support_ticket(issue_summary: str) -> dict:
-    import uuid
-    ticket_id = f"TKT-{uuid.uuid4().hex[:6].upper()}"
-    return {"ticket_id": ticket_id, "message": "Ticket raised. Human agent will contact within 2 hours."}
+def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, message: str) -> dict:
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                customer_id = None
+                if order_id:
+                    cur.execute("SELECT customer_id FROM orders WHERE order_id = %s", (order_id,))
+                    row = cur.fetchone()
+                    if row:
+                        customer_id = row[0]
+                
+                cur.execute("""
+                    INSERT INTO support_tickets (ticket_id, customer_id, order_id, issue_type, message)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (ticket_id, customer_id, order_id, issue_type, message))
+                conn.commit()
+                return {"success": True, "message": "A human agent will review your case and contact you within 2 hours."}
+    except Exception as e:
+        logger.error("DB error in create_support_ticket", extra={"event": "db_error", "error": str(e), "ticket_id": ticket_id})
+        return {"success": False, "message": "We experienced an issue creating your ticket, but an agent has been notified."}
