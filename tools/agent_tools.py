@@ -1,7 +1,8 @@
 from langchain_core.tools import tool
 from tools.real_tools import (
     get_order_status, get_refund_status, initiate_return,
-    cancel_order, get_customer_orders, place_new_order
+    cancel_order, get_customer_orders, place_new_order,
+    register_new_customer
 )
 import re
 
@@ -46,6 +47,12 @@ def lookup_customer_orders(customer_name: str) -> str:
     return str(result)
 
 @tool
+def register_customer(name: str, email: str, phone: str = None) -> str:
+    """Register a new customer account. Use when a customer wants to register, or when they want to place an order but don't have an account yet. Requires their full name and email address. Phone is optional."""
+    result = register_new_customer(name, email, phone)
+    return str(result)
+
+@tool
 def create_new_order(customer_name: str, item: str) -> str:
     """Place a new order for a customer. Use when a customer says they want to buy or order a new item. You must ask for their name and the item they want to buy."""
     result = place_new_order(customer_name, item)
@@ -58,5 +65,6 @@ AGENT_TOOLS = [
     process_return,
     process_cancellation,
     lookup_customer_orders,
+    register_customer,
     create_new_order
 ]

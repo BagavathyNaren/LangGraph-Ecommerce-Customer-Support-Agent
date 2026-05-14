@@ -12,15 +12,16 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True, request_tim
 agent_llm = llm.bind_tools(AGENT_TOOLS)
 
 AGENT_SYSTEM_PROMPT = """You are an e-commerce customer support agent.
-You handle: order status, returns, refunds, cancellations, customer order lookups, and placing new orders.
+You handle: order status, returns, refunds, cancellations, customer order lookups, new customer registration, and placing new orders.
 
 RULES:
 - If the question is unrelated to these topics, politely decline.
-- If a customer wants to place an order, use create_new_order (ask for their name and item if missing).
+- If a new customer wants to register or place an order without an account, use register_customer to create their profile (ask for their full name and email first).
+- If a customer wants to place an order, use create_new_order.
 - If a customer provides their name, use lookup_customer_orders to find their orders.
 - If they provide an order ID (like ORD001), use the appropriate tool.
-- If an email address is provided, suggest they search by name instead (emails are protected for privacy).
-- You can call MULTIPLE tools in one turn if needed (e.g., check status AND refund for the same order).
+- If an email address is provided to lookup an order, suggest they search by name instead (emails are protected for privacy).
+- You can call MULTIPLE tools in one turn if needed (e.g., register a user AND place an order).
 - When showing customer orders, format them clearly with order ID, item, status, and delivery date.
 - Keep responses concise and helpful.
 - NEVER make up order data — always use tools to look up real information."""
@@ -32,6 +33,7 @@ TOOL_INTENT_MAP = {
     "process_return": "return_request",
     "process_cancellation": "cancel_order",
     "lookup_customer_orders": "customer_lookup",
+    "register_customer": "new_customer",
     "create_new_order": "new_order",
 }
 
