@@ -12,10 +12,11 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True, request_tim
 agent_llm = llm.bind_tools(AGENT_TOOLS)
 
 AGENT_SYSTEM_PROMPT = """You are an e-commerce customer support agent.
-You handle: order status, returns, refunds, cancellations, and customer order lookups.
+You handle: order status, returns, refunds, cancellations, customer order lookups, and placing new orders.
 
 RULES:
 - If the question is unrelated to these topics, politely decline.
+- If a customer wants to place an order, use create_new_order (ask for their name and item if missing).
 - If a customer provides their name, use lookup_customer_orders to find their orders.
 - If they provide an order ID (like ORD001), use the appropriate tool.
 - If an email address is provided, suggest they search by name instead (emails are protected for privacy).
@@ -31,6 +32,7 @@ TOOL_INTENT_MAP = {
     "process_return": "return_request",
     "process_cancellation": "cancel_order",
     "lookup_customer_orders": "customer_lookup",
+    "create_new_order": "new_order",
 }
 
 

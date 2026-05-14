@@ -1,7 +1,7 @@
 from langchain_core.tools import tool
 from tools.real_tools import (
     get_order_status, get_refund_status, initiate_return,
-    cancel_order, get_customer_orders
+    cancel_order, get_customer_orders, place_new_order
 )
 import re
 
@@ -45,11 +45,18 @@ def lookup_customer_orders(customer_name: str) -> str:
     result = get_customer_orders(customer_name)
     return str(result)
 
+@tool
+def create_new_order(customer_name: str, item: str) -> str:
+    """Place a new order for a customer. Use when a customer says they want to buy or order a new item. You must ask for their name and the item they want to buy."""
+    result = place_new_order(customer_name, item)
+    return str(result)
+
 # All tools available to the agent
 AGENT_TOOLS = [
     check_order_status,
     check_refund_status,
     process_return,
     process_cancellation,
-    lookup_customer_orders
+    lookup_customer_orders,
+    create_new_order
 ]

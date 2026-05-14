@@ -142,6 +142,45 @@ def get_customer_orders(customer_name: str) -> dict:
         logger.error("DB error in get_customer_orders", extra={"event": "db_error", "error": str(e), "query": customer_name})
         return {"error": USER_FRIENDLY_DB_ERROR}
 
+def place_new_order(customer_name: str, item: str) -> dict:
+    """Place a new order for a customer."""
+    import random
+    from datetime import datetime, timedelta
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                # Find customer
+                cur.execute("SELECT customer_id FROM customers WHERE name ILIKE %s OR email ILIKE %s", (f"%{customer_name}%", f"%{customer_name}%"))
+                row = cur.fetchone()
+                if not row:
+                    return {"success": False, "message": f"Customer '{customer_name}' not found. Please register an account first."}
+                
+                customer_id = row[0]
+                # Ensure unique order ID
+                while True:
+                    order_id = f"ORD{random.randint(100, 9999)}"
+                    cur.execute("SELECT order_id FROM orders WHERE order_id = %s", (order_id,))
+                    if not cur.fetchone():
+                        break
+
+                tracking = f"TRK-{order_id}-{datetime.now().year}"
+                delivery_date = (datetime.now() + timedelta(days=5)).date()
+                
+                cur.execute("""
+                    INSERT INTO orders (order_id, customer_id, item, status, expected_delivery, tracking_number)
+                    VALUES (%s, %s, %s, 'processing', %s, %s)
+                """, (order_id, customer_id, item, delivery_date, tracking))
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "order_id": order_id,
+                    "message": f"Order {order_id} for '{item}' has been placed successfully! Expected delivery: {delivery_date}. Tracking: {tracking}"
+                }
+    except Exception as e:
+        logger.error("DB error in place_new_order", extra={"event": "db_error", "error": str(e), "customer": customer_name})
+        return {"error": USER_FRIENDLY_DB_ERROR}
+
 def search_knowledge_base(query: str) -> dict:
     return {"answer": f"Based on our policy regarding '{query}': please allow 5-7 business days for processing. Contact support for urgent cases."}
 
