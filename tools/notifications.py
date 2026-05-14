@@ -55,17 +55,22 @@ def send_telegram_sync(chat_id: str, message: str):
         logger.info(f"TELEGRAM NOTIFICATION [MOCK]\nTo Chat: {chat_id}\nMessage: {message}", 
                     extra={"event": "telegram_mock_sent", "chat_id": chat_id})
         return
+
+    # Debug: Masked token check
+    masked_token = f"{bot_token[:5]}...{bot_token[-5:]}" if len(bot_token) > 10 else "SHORT_TOKEN"
+    logger.info(f"Attempting Telegram via token {masked_token} to chat {chat_id}", extra={"event": "telegram_attempt"})
     
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     data = {"chat_id": chat_id, "text": message}
     
     try:
-        response = requests.post(url, json=data, timeout=15)
+        # Try with a longer timeout and verify the endpoint
+        response = requests.post(url, json=data, timeout=25)
         response.raise_for_status()
         logger.info(f"Telegram message sent to {chat_id}", extra={"event": "telegram_sent", "chat_id": chat_id})
     except Exception as e:
         logger.error(f"Failed to send Telegram message to {chat_id}", 
-                     extra={"event": "telegram_failed", "error": str(e), "chat_id": chat_id})
+                     extra={"event": "telegram_failed", "error": str(e), "chat_id": chat_id, "token_check": masked_token})
 
 def send_telegram(chat_id: str, message: str):
     """Asynchronously send a Telegram message without blocking the main thread."""
