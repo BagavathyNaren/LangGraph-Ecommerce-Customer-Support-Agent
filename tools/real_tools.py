@@ -267,15 +267,27 @@ def search_knowledge_base(query: str) -> dict:
     return {"answer": f"Based on our policy regarding '{query}': please allow 5-7 business days for processing. Contact support for urgent cases."}
 
 def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, message: str) -> dict:
+    # Issues that only make sense for delivered orders
+    DELIVERY_REQUIRED_ISSUES = {"stolen", "damaged", "wrong_item", "missing_item", "not_received"}
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
                 customer_id = None
                 if order_id:
-                    cur.execute("SELECT customer_id FROM orders WHERE order_id = %s", (order_id,))
+                    cur.execute("SELECT customer_id, status FROM orders WHERE order_id = %s", (order_id,))
                     row = cur.fetchone()
                     if row:
                         customer_id = row[0]
+                        order_status = row[1]
+                        
+                        # Guard: Physical-delivery issues require a delivered order
+                        if issue_type.lower() in DELIVERY_REQUIRED_ISSUES and order_status != "delivered":
+                            return {
+                                "success": False,
+                                "message": f"Order {order_id} has status '{order_status}' and has not been delivered yet. "
+                                           f"Please wait for delivery before reporting a {issue_type} issue. "
+                                           f"If your order is significantly delayed, we can help with that instead."
+                            }
                 
                 cur.execute("""
                     INSERT INTO support_tickets (ticket_id, customer_id, order_id, issue_type, message)

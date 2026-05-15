@@ -277,7 +277,10 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
             raw_email = email_match.group(0) if email_match else None
             
-            if not pii_detected:
+            # CACHE BYPASS: Never serve analytics from cache — data must be real-time
+            is_analytics_query = any(word in validated_message.lower() for word in ["analytics", "stats", "summary", "dashboard"])
+            
+            if not pii_detected and not is_analytics_query:
                 cached = get_cached_response(validated_message, thread_id)
                 if cached:
                     duration_ms = round((time.time() - start) * 1000)
@@ -314,7 +317,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             )
             response = validate_output(get_final_response(result))
 
-            if not pii_detected and not result.get("escalated", False):
+            if not pii_detected and not result.get("escalated", False) and not is_analytics_query:
                 set_cached_response(validated_message, {
                     "response": response,
                     "intent": result.get("intent"),
