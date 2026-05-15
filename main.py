@@ -156,7 +156,10 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
                 "thread_id": request.thread_id
             })
 
-        if not pii_detected:
+        # CACHE BYPASS: Never cache analytics or status requests
+        is_analytics_query = any(word in validated_message.lower() for word in ["analytics", "stats", "summary", "dashboard"])
+        
+        if not pii_detected and not is_analytics_query:
             cached = get_cached_response(validated_message, request.thread_id)
             if cached:
                 duration_ms = round((time.time() - start) * 1000)
@@ -184,7 +187,7 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
             "pii_detected": pii_detected
         }
 
-        if not pii_detected and not result.get("escalated", False):
+        if not pii_detected and not result.get("escalated", False) and not is_analytics_query:
             set_cached_response(validated_message, response_data, request.thread_id)
 
         from tools.logging_tools import log_conversation
