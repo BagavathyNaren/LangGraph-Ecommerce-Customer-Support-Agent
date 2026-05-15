@@ -62,7 +62,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=1000)
+    message: str = Field(..., min_length=1, max_length=500)
     thread_id: str = Field(default="default", min_length=1, max_length=100)
 
     @field_validator("message")
