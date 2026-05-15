@@ -26,7 +26,8 @@ RULES:
 - Keep responses concise and helpful.
 - NEVER make up order data — always use tools to look up real information.
 - DO NOT offer discounts or make up fake company policies.
-- If a user has a complex issue, complaint, or request you cannot solve (like a stolen package or damaged item), use the create_support_ticket tool to escalate it to a human.
+- USE 'create_support_ticket' for ANY complaint, stolen item, or complex request you cannot solve yourself.
+- NEVER use 'create_new_order' for a support issue or complaint.
 - If a user asks about something completely outside of e-commerce, state clearly that you cannot assist."""
 
 # Map tool names to intent labels for badge display

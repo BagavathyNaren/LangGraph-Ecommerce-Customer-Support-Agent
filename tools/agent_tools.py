@@ -62,8 +62,17 @@ def register_customer(name: str, email: str, config: RunnableConfig) -> str:
 
 @tool
 def create_new_order(customer_name: str, item: str) -> str:
-    """Place a new order for a customer. Use when a customer says they want to buy or order a new item. You must ask for their name and the item they want to buy."""
+    """Place a new order for a customer. Use ONLY when a customer explicitly wants to BUY or PURCHASE a new product. Do NOT use for complaints, stolen items, or support issues."""
     result = place_new_order(customer_name, item)
+    return str(result)
+
+@tool
+def create_support_ticket(order_id: str, issue_type: str, message: str) -> str:
+    """Create a support ticket for a human agent. Use for complex issues, complaints, stolen packages, damaged items, or when the user explicitly asks for a human. Requires order ID, issue type (e.g., 'stolen_package', 'damaged'), and a descriptive message."""
+    from tools.real_tools import create_support_ticket as create_ticket_logic
+    import uuid
+    ticket_id = f"TKT-{uuid.uuid4().hex[:6].upper()}"
+    result = create_ticket_logic(ticket_id, order_id, issue_type, message)
     return str(result)
 
 # All tools available to the agent
@@ -74,5 +83,6 @@ AGENT_TOOLS = [
     process_cancellation,
     lookup_customer_orders,
     register_customer,
-    create_new_order
+    create_new_order,
+    create_support_ticket
 ]
