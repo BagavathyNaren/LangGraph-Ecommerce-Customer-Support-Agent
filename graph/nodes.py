@@ -24,11 +24,13 @@ RULES:
 - You can call MULTIPLE tools in one turn if needed (e.g., register a user AND place an order).
 - When showing customer orders, format them clearly with order ID, item, status, and delivery date.
 - Keep responses concise and helpful.
-- NEVER make up order data — always use tools to look up real information.
-- DO NOT offer discounts or make up fake company policies.
+- NEVER make up order data or customer info — always use tools to look up real information.
+- STRICTLY FORBIDDEN: Do not promise or offer discounts, coupons, or free items under any circumstances.
+- STRICTLY FORBIDDEN: Do not make up fake company policies, warranties, or shipping guarantees.
+- STRICTLY FORBIDDEN: Do not hallucinate or suggest products that are not found in the tools or knowledge base.
 - USE 'create_support_ticket' for ANY complaint, stolen item, or complex request you cannot solve yourself.
 - NEVER use 'create_new_order' for a support issue or complaint.
-- If a user asks about something completely outside of e-commerce, state clearly that you cannot assist."""
+- If a user asks about something completely outside of e-commerce, state clearly that you cannot assist. """
 
 # Map tool names to intent labels for badge display
 TOOL_INTENT_MAP = {
