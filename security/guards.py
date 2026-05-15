@@ -32,7 +32,7 @@ JAILBREAK_PATTERNS = [
     r"\[INST\]", r"\[/INST\]",
     r"(?i)stay\s+in\s+character",
     r"(?i)initial\s+prompt",
-    r"(?i)([s\s\-\.\*]*[y\s\-\.\*]*[s\s\-\.\*]*[t\s\-\.\*]*[e\s\-\.\*]*[m\s\-\.\*]*\s+[p\s\-\.\*]*[r\s\-\.\*]*[o\s\-\.\*]*[m\s\-\.\*]*[p\s\-\.\*]*[t\s\-\.\*]*)",
+    r"(?i)s[\s\-\.\*]*y[\s\-\.\*]*s[\s\-\.\*]*t[\s\-\.\*]*e[\s\-\.\*]*m[\s\-\.\*]*\s+p[\s\-\.\*]*r[\s\-\.\*]*o[\s\-\.\*]*m[\s\-\.\*]*p[\s\-\.\*]*t",
     r"(?i)format\s+(as|to)\s+(json|table|csv|markdown|xml)",
     r"(?i)translate\s+(to|into)\s+(french|spanish|german|chinese|japanese|russian)",
     r"(?i)output\s+your\s+(rules|instructions|prompt)",
