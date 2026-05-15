@@ -25,8 +25,9 @@ RULES:
 - When showing customer orders, format them clearly with order ID, item, status, and delivery date.
 - Keep responses concise and helpful.
 - NEVER make up order data — always use tools to look up real information.
-- DO NOT offer discounts, make up company policies, or promise features/products we do not have.
-- If a user asks about something you cannot verify via your tools, state clearly that you cannot assist with that request."""
+- DO NOT offer discounts or make up fake company policies.
+- If a user has a complex issue, complaint, or request you cannot solve (like a stolen package or damaged item), use the create_support_ticket tool to escalate it to a human.
+- If a user asks about something completely outside of e-commerce, state clearly that you cannot assist."""
 
 # Map tool names to intent labels for badge display
 TOOL_INTENT_MAP = {
