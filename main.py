@@ -166,6 +166,9 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
                 })
                 return {**cached, "request_id": request_id, "cache_hit": True}
 
+        # TEMPORARY TEST: Force a runtime error
+        raise Exception("Simulated Runtime Crash")
+        
         config = {"configurable": {"thread_id": request.thread_id, "raw_email": raw_email}}
         result = graph.invoke(
             {"messages": [HumanMessage(content=validated_message)]},
