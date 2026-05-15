@@ -46,10 +46,14 @@ TOOL_INTENT_MAP = {
 
 def agent_node(state: AgentState) -> AgentState:
     """The agent LLM decides what to do — call tools or respond directly with pruning."""
-    # Reset metadata at the start of a new user turn
-    if isinstance(state["messages"][-1], HumanMessage):
-        state["intent"] = None
-        state["order_id"] = None
+    # Reset intent and order_id at the start of a new user turn
+    new_intent = None
+    new_order_id = None
+    
+    # If we are NOT in a new turn (e.g. still in a tool loop), keep existing values
+    if not isinstance(state["messages"][-1], HumanMessage):
+        new_intent = state.get("intent")
+        new_order_id = state.get("order_id")
 
     # PERSISTENCE OPTIMIZATION: Keep only the last 15 messages in the DB state
     # We use a "Safe Cut" approach to ensure we don't break tool-call chains.
@@ -73,9 +77,11 @@ def agent_node(state: AgentState) -> AgentState:
     messages = [SystemMessage(content=AGENT_SYSTEM_PROMPT)] + state["messages"]
     response = agent_llm.invoke(messages)
     
-    # Return both the AI response and the removal instructions
+    # Return the AI response, removal instructions, and reset state
     return {
-        "messages": [response] + messages_to_remove
+        "messages": [response] + messages_to_remove,
+        "intent": new_intent,
+        "order_id": new_order_id
     }
 
 
