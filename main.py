@@ -262,6 +262,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             "pii_detected": pii_detected
         })
         try:
+            # TEMPORARY TEST: Force a streaming runtime error
+            raise Exception("Simulated Streaming Crash")
+            
             email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
             raw_email = email_match.group(0) if email_match else None
             
