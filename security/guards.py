@@ -31,7 +31,17 @@ JAILBREAK_PATTERNS = [
     r"(?i)switch\s+to\s+unfiltered",
     r"\[INST\]", r"\[/INST\]",
     r"(?i)stay\s+in\s+character",
-    r"(?i)initial\s+prompt"
+    r"(?i)initial\s+prompt",
+    r"(?i)([s\s\-\.\*]*[y\s\-\.\*]*[s\s\-\.\*]*[t\s\-\.\*]*[e\s\-\.\*]*[m\s\-\.\*]*\s+[p\s\-\.\*]*[r\s\-\.\*]*[o\s\-\.\*]*[m\s\-\.\*]*[p\s\-\.\*]*[t\s\-\.\*]*)",
+    r"(?i)format\s+(as|to)\s+(json|table|csv|markdown|xml)",
+    r"(?i)translate\s+(to|into)\s+(french|spanish|german|chinese|japanese|russian)",
+    r"(?i)output\s+your\s+(rules|instructions|prompt)",
+    r"(?i)summarize\s+your\s+(rules|instructions|prompt)",
+    r"(?i)give\s+me\s+the\s+text\s+above",
+    r"(?i)what\s+did\s+I\s+ask\s+you\s+to\s+do",
+    r"(?i)base64",
+    r"(?i)ROT13",
+    r"(?i)binary\s+code"
 ]
 
 def validate_input(message: str) -> tuple[str, bool]:
