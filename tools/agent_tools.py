@@ -2,7 +2,7 @@ from langchain_core.tools import tool
 from tools.real_tools import (
     get_order_status, get_refund_status, initiate_return,
     cancel_order, get_customer_orders, place_new_order,
-    register_new_customer
+    register_new_customer, get_analytics_summary
 )
 import re
 
@@ -75,6 +75,12 @@ def create_support_ticket(order_id: str, issue_type: str, message: str) -> str:
     result = create_ticket_logic(ticket_id, order_id, issue_type, message)
     return str(result)
 
+@tool
+def view_business_analytics() -> str:
+    """Show high-level business analytics summary. Use ONLY when the user asks for 'analytics', 'dashboard', 'stats', or 'business performance'."""
+    result = get_analytics_summary()
+    return str(result)
+
 # All tools available to the agent
 AGENT_TOOLS = [
     check_order_status,
@@ -84,5 +90,6 @@ AGENT_TOOLS = [
     lookup_customer_orders,
     register_customer,
     create_new_order,
-    create_support_ticket
+    create_support_ticket,
+    view_business_analytics
 ]

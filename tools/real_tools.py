@@ -312,3 +312,41 @@ def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, messag
     except Exception as e:
         logger.error("DB error in create_support_ticket", extra={"event": "db_error", "error": str(e), "ticket_id": ticket_id})
         return {"success": False, "message": "We experienced an issue creating your ticket, but an agent has been notified."}
+
+def get_analytics_summary() -> dict:
+    """Fetch a summary of business analytics from the database."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                # 1. Total Tickets Created
+                cur.execute("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'ticket_created'")
+                total_tickets = cur.fetchone()[0]
+
+                # 2. Total Returns Initiated
+                cur.execute("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'return_initiated'")
+                total_returns = cur.fetchone()[0]
+
+                # 3. Average Latency
+                cur.execute("SELECT AVG(duration_ms) FROM analytics_events WHERE duration_ms IS NOT NULL")
+                avg_latency = round(cur.fetchone()[0] or 0)
+
+                # 4. Most Common Intent
+                cur.execute("""
+                    SELECT intent, COUNT(*) as count 
+                    FROM analytics_events 
+                    WHERE intent IS NOT NULL 
+                    GROUP BY intent 
+                    ORDER BY count DESC 
+                    LIMIT 1
+                """)
+                top_intent_row = cur.fetchone()
+                top_intent = top_intent_row[0] if top_intent_row else "N/A"
+
+                return {
+                    "total_tickets": total_tickets,
+                    "total_returns": total_returns,
+                    "avg_response_time_ms": avg_latency,
+                    "most_common_intent": top_intent
+                }
+    except Exception as e:
+        return {"error": "Could not retrieve analytics data."}
