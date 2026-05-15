@@ -28,18 +28,15 @@ def init_analytics_db():
         logger.error("Failed to initialize analytics DB", extra={"event": "analytics_init_error", "error": str(e)})
 
 def log_event(event_type: str, thread_id: str = None, intent: str = None, metadata: dict = None, duration_ms: int = None):
-    """Log an analytics event asynchronously."""
-    def _log():
-        try:
-            with get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO analytics_events (event_type, thread_id, intent, metadata, duration_ms)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (event_type, thread_id, intent, json.dumps(metadata or {}), duration_ms))
-                conn.commit()  # ESSENTIAL: Save the event!
-        except Exception as e:
-            logger.error(f"Failed to log event {event_type}", extra={"event": "log_error", "error": str(e)})
-
-    # Run in a separate thread to avoid blocking the main chat flow
-    threading.Thread(target=_log, daemon=True).start()
+    """Log an analytics event synchronously (intended to be called via BackgroundTasks)."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO analytics_events (event_type, thread_id, intent, metadata, duration_ms)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (event_type, thread_id, intent, json.dumps(metadata or {}), duration_ms))
+            conn.commit()
+            logger.info(f"Logged event: {event_type}")
+    except Exception as e:
+        logger.error(f"Failed to log event {event_type}: {e}")

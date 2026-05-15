@@ -210,7 +210,8 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         })
 
         duration_ms = round((time.time() - start) * 1000)
-        log_event(
+        background_tasks.add_task(
+            log_event,
             "chat_response", 
             request.thread_id, 
             result.get("intent"), 
@@ -347,7 +348,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             )
             
             duration_ms = round((time.time() - start) * 1000)
-            log_event(
+            # Use BackgroundTasks for stream logging
+            background_tasks.add_task(
+                log_event,
                 "stream_response", 
                 thread_id, 
                 result.get("intent"), 

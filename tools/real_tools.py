@@ -109,7 +109,7 @@ def initiate_return(order_id: str, reason: str) -> dict:
                     
                 conn.commit()
 
-                # ANALYTICS: Log return conversion
+                # ANALYTICS: Log return conversion (Synchronous for 100% reliability)
                 log_event("return_initiated", order_id, "return", {"refund_id": refund_id, "amount": amount})
 
                 return {
@@ -305,7 +305,7 @@ def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, messag
 
                 conn.commit()
 
-                # ANALYTICS: Log ticket conversion
+                # ANALYTICS: Log ticket conversion (Synchronous for 100% reliability)
                 log_event("ticket_created", order_id, "support", {"ticket_id": ticket_id, "issue": issue_type})
 
                 return {"success": True, "message": "A human agent will review your case and contact you within 2 hours."}
