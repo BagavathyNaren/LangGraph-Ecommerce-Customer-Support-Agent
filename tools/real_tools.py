@@ -1,6 +1,7 @@
 import os
 from tools.db import get_connection
 from logger import get_logger
+from tools.analytics import log_event
 
 logger = get_logger("tools")
 
@@ -107,6 +108,9 @@ def initiate_return(order_id: str, reason: str) -> dict:
                         )
                     
                 conn.commit()
+
+                # ANALYTICS: Log return conversion
+                log_event("return_initiated", order_id, "return", {"refund_id": refund_id, "amount": amount})
 
                 return {
                     "success": True,
@@ -300,6 +304,10 @@ def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, messag
                             )
 
                 conn.commit()
+
+                # ANALYTICS: Log ticket conversion
+                log_event("ticket_created", order_id, "support", {"ticket_id": ticket_id, "issue": issue_type})
+
                 return {"success": True, "message": "A human agent will review your case and contact you within 2 hours."}
     except Exception as e:
         logger.error("DB error in create_support_ticket", extra={"event": "db_error", "error": str(e), "ticket_id": ticket_id})

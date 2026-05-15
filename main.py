@@ -16,6 +16,7 @@ import uuid
 import asyncio
 import json
 import psycopg
+from tools.analytics import init_analytics_db, log_event
 
 os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
@@ -44,6 +45,7 @@ def get_final_response(result):
 async def lifespan(app: FastAPI):
     global graph
     logger.info("Starting up agent", extra={"event": "startup"})
+    init_analytics_db()
     graph = build_graph()
     logger.info("Graph built successfully", extra={"event": "graph_ready"})
     yield
@@ -207,6 +209,15 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
             "cache_hit": False
         })
 
+        duration_ms = round((time.time() - start) * 1000)
+        log_event(
+            "chat_response", 
+            request.thread_id, 
+            result.get("intent"), 
+            {"pii": pii_detected}, 
+            duration_ms
+        )
+
         return {**response_data, "request_id": request_id, "cache_hit": False}
 
     except ValueError as e:
@@ -333,6 +344,15 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 response,
                 result.get("intent"),
                 result.get("order_id")
+            )
+            
+            duration_ms = round((time.time() - start) * 1000)
+            log_event(
+                "stream_response", 
+                thread_id, 
+                result.get("intent"), 
+                {"pii": pii_detected}, 
+                duration_ms
             )
             
             yield f"data: {json.dumps({'done': True, 'intent': result.get('intent'), 'escalated': result.get('escalated', False), 'order_id': result.get('order_id'), 'cache_hit': False})}\n\n"
