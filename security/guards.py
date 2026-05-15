@@ -17,14 +17,21 @@ JAILBREAK_PATTERNS = [
     r"(?i)pretend\s+(you|to)\s+(are|be)",
     r"(?i)do\s+not\s+follow\s+your\s+(rules|instructions|guidelines)",
     r"(?i)DAN\s+mode",
-    r"(?i)act\s+as\s+(a\s+)?(unrestricted|unfiltered|evil)",
-    r"(?i)reveal\s+(your|the)\s+(system|original)\s+(prompt|instructions)",
-    r"(?i)(show|tell|give)\s+(me\s+)?(your|the)\s+(api|secret)\s*key",
-    r"(?i)what\s+(is|are)\s+your\s+(system|original)\s+(prompt|instructions)",
+    r"(?i)developer\s+mode",
+    r"(?i)act\s+as\s+(a\s+)?(unrestricted|unfiltered|evil|jailbroken)",
+    r"(?i)reveal\s+(your|the)\s+(system|original|initial)\s+(prompt|instructions|message)",
+    r"(?i)(show|tell|give)\s+(me\s+)?(your|the)\s+(api|secret|password|db)\s*(key|password)",
+    r"(?i)what\s+(is|are)\s+your\s+(system|original|initial)\s+(prompt|instructions)",
     r"(?i)disregard\s+previous\s+instructions",
     r"(?i)new\s+rule(s)?\s*:",
     r"(?i)start\s+with\s+(the\s+words|the\s+phrase)",
     r"(?i)print\s+your\s+instructions",
+    r"(?i)repeat\s+everything\s+above",
+    r"(?i)bypass\s+all\s+guardrails",
+    r"(?i)switch\s+to\s+unfiltered",
+    r"\[INST\]", r"\[/INST\]",
+    r"(?i)stay\s+in\s+character",
+    r"(?i)initial\s+prompt"
 ]
 
 def validate_input(message: str) -> tuple[str, bool]:
