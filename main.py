@@ -166,9 +166,6 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
                 })
                 return {**cached, "request_id": request_id, "cache_hit": True}
 
-        # TEMPORARY TEST: Force a runtime error
-        raise Exception("Simulated Runtime Crash")
-        
         config = {"configurable": {"thread_id": request.thread_id, "raw_email": raw_email}}
         result = graph.invoke(
             {"messages": [HumanMessage(content=validated_message)]},
@@ -262,9 +259,6 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             "pii_detected": pii_detected
         })
         try:
-            # TEMPORARY TEST: Force a streaming runtime error
-            raise Exception("Simulated Streaming Crash")
-            
             email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
             raw_email = email_match.group(0) if email_match else None
             
