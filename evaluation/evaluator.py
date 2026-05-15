@@ -200,6 +200,10 @@ TEST_CASES = [
 
 def run_evaluation(graph):
     """Run the full v1.0 evaluation suite against the live agent graph."""
+    # Generate a unique run ID to prevent thread state contamination between runs
+    run_id = str(int(time.time()))
+    logger.info(f"Starting evaluation run: {run_id}", extra={"event": "eval_start", "run_id": run_id})
+
     results = []
     passed = 0
     failed = 0
@@ -211,6 +215,8 @@ def run_evaluation(graph):
         if section not in section_stats:
             section_stats[section] = {"passed": 0, "failed": 0}
 
+        # Unique thread per run to prevent state contamination
+        isolated_thread_id = f"{case['thread_id']}-{run_id}"
         start_time = time.time()
         try:
             from security.guards import validate_input, validate_output
@@ -233,6 +239,7 @@ def run_evaluation(graph):
                     "input": case["input"],
                     "response": "BLOCKED" if block_passed else "NOT BLOCKED (FAIL)",
                     "duration_ms": duration_ms,
+                    "thread_id": isolated_thread_id,
                     "checks": [{"check": "jailbreak_blocked", "expected": True, "actual": block_passed, "passed": block_passed}],
                     "passed": block_passed
                 }
@@ -247,7 +254,7 @@ def run_evaluation(graph):
 
             validated_message, pii_detected = validate_input(case["input"])
 
-            config = {"configurable": {"thread_id": case["thread_id"]}}
+            config = {"configurable": {"thread_id": isolated_thread_id}}
             result = graph.invoke(
                 {"messages": [HumanMessage(content=validated_message)]},
                 config=config
