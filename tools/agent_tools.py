@@ -49,15 +49,15 @@ def lookup_customer_orders(customer_name: str) -> str:
 from langchain_core.runnables import RunnableConfig
 
 @tool
-def register_customer(name: str, email: str, config: RunnableConfig) -> str:
-    """Register a new customer account. Use when a customer wants to register, or when they want to place an order but don't have an account yet. Requires their full name and email address."""
+def register_customer(name: str, email: str, config: RunnableConfig, phone_number: str = None) -> str:
+    """Register a new customer account. Use when a customer wants to register, or when they want to place an order but don't have an account yet. Requires their full name and email. Phone number is optional but recommended for SMS notifications on GCP."""
     if email == "<EMAIL_ADDRESS>":
         real_email = config.get("configurable", {}).get("raw_email")
         if real_email:
             email = real_email
         else:
             return "Error: Secure email vault extraction failed. Please ensure your email is valid."
-    result = register_new_customer(name, email)
+    result = register_new_customer(name, email, phone_number)
     return str(result)
 
 @tool

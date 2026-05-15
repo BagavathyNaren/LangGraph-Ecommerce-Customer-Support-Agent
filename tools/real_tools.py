@@ -196,7 +196,7 @@ def get_customer_orders(customer_name: str) -> dict:
         logger.error("DB error in get_customer_orders", extra={"event": "db_error", "error": str(e), "query": customer_name})
         return {"error": USER_FRIENDLY_DB_ERROR}
 
-def register_new_customer(name: str, email: str) -> dict:
+def register_new_customer(name: str, email: str, phone_number: str = None) -> dict:
     """Register a new customer in the database."""
     import uuid
     try:
@@ -210,15 +210,20 @@ def register_new_customer(name: str, email: str) -> dict:
                 customer_id = f"CUST-{uuid.uuid4().hex[:6].upper()}"
                 
                 cur.execute("""
-                    INSERT INTO customers (customer_id, name, email)
-                    VALUES (%s, %s, %s)
-                """, (customer_id, name, email))
+                    INSERT INTO customers (customer_id, name, email, phone_number)
+                    VALUES (%s, %s, %s, %s)
+                """, (customer_id, name, email, phone_number))
                 conn.commit()
+                
+                contact = f"email '{email}'"
+                if phone_number:
+                    contact += f" and phone '{phone_number}'"
                 
                 return {
                     "success": True,
                     "customer_id": customer_id,
-                    "message": f"Customer '{name}' successfully registered with email '{email}'."
+                    "phone_number": phone_number,
+                    "message": f"Customer '{name}' successfully registered with {contact}."
                 }
     except Exception as e:
         logger.error("DB error in register_new_customer", extra={"event": "db_error", "error": str(e), "email": email})

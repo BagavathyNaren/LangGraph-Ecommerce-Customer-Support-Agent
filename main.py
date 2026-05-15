@@ -46,6 +46,22 @@ async def lifespan(app: FastAPI):
     global graph
     logger.info("Starting up agent", extra={"event": "startup"})
     init_analytics_db()
+    # Self-healing DB migration: ensure phone_number column exists (safe for GCP migration)
+    try:
+        from tools.db import get_connection
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    ALTER TABLE customers 
+                    ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) DEFAULT NULL;
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_customers_phone 
+                    ON customers(phone_number);
+                """)
+        logger.info("DB migration: phone_number column verified", extra={"event": "db_migration"})
+    except Exception as e:
+        logger.warning(f"DB migration warning: {e}", extra={"event": "db_migration_warning"})
     graph = build_graph()
     logger.info("Graph built successfully", extra={"event": "graph_ready"})
     yield
