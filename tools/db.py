@@ -7,7 +7,7 @@ def get_pool() -> ConnectionPool:
     global _pool
     if _pool is None:
         _pool = ConnectionPool(
-            "postgres://broken_url:5432/fake_db",
+            os.environ["DATABASE_URL"],
             min_size=1,
             max_size=5,
             open=True,
