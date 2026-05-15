@@ -4,7 +4,7 @@ from logger import get_logger
 
 logger = get_logger("tools")
 
-USER_FRIENDLY_DB_ERROR = "We're experiencing a temporary issue. Please try again in a moment."
+USER_FRIENDLY_DB_ERROR = "We are experiencing high traffic, please try again in a few minutes."
 
 def get_order_status(order_id: str) -> dict:
     try:
