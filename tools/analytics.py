@@ -37,6 +37,7 @@ def log_event(event_type: str, thread_id: str = None, intent: str = None, metada
                         INSERT INTO analytics_events (event_type, thread_id, intent, metadata, duration_ms)
                         VALUES (%s, %s, %s, %s, %s)
                     """, (event_type, thread_id, intent, json.dumps(metadata or {}), duration_ms))
+                conn.commit()  # ESSENTIAL: Save the event!
         except Exception as e:
             logger.error(f"Failed to log event {event_type}", extra={"event": "log_error", "error": str(e)})
 
