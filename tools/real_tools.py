@@ -320,15 +320,16 @@ def get_analytics_summary() -> dict:
             with conn.cursor() as cur:
                 # 1. Total Tickets Created
                 cur.execute("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'ticket_created'")
-                total_tickets = cur.fetchone()[0]
+                total_tickets = int(cur.fetchone()[0] or 0)
 
                 # 2. Total Returns Initiated
                 cur.execute("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'return_initiated'")
-                total_returns = cur.fetchone()[0]
+                total_returns = int(cur.fetchone()[0] or 0)
 
-                # 3. Average Latency
+                # 3. Average Latency (Convert Decimal to Int)
                 cur.execute("SELECT AVG(duration_ms) FROM analytics_events WHERE duration_ms IS NOT NULL")
-                avg_latency = round(cur.fetchone()[0] or 0)
+                avg_latency_raw = cur.fetchone()[0]
+                avg_latency = round(float(avg_latency_raw)) if avg_latency_raw is not None else 0
 
                 # 4. Most Common Intent
                 cur.execute("""
@@ -340,7 +341,7 @@ def get_analytics_summary() -> dict:
                     LIMIT 1
                 """)
                 top_intent_row = cur.fetchone()
-                top_intent = top_intent_row[0] if top_intent_row else "N/A"
+                top_intent = str(top_intent_row[0]) if top_intent_row else "N/A"
 
                 return {
                     "total_tickets": total_tickets,
