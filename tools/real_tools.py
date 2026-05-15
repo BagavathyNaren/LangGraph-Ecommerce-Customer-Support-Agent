@@ -267,8 +267,8 @@ def search_knowledge_base(query: str) -> dict:
     return {"answer": f"Based on our policy regarding '{query}': please allow 5-7 business days for processing. Contact support for urgent cases."}
 
 def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, message: str) -> dict:
-    # Issues that only make sense for delivered orders
-    DELIVERY_REQUIRED_ISSUES = {"stolen", "damaged", "wrong_item", "missing_item", "not_received"}
+    # Keywords that indicate a physical delivery issue (requires delivered status)
+    DELIVERY_REQUIRED_KEYWORDS = {"stolen", "damaged", "wrong_item", "missing", "not_received"}
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -280,12 +280,13 @@ def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, messag
                         customer_id = row[0]
                         order_status = row[1]
                         
-                        # Guard: Physical-delivery issues require a delivered order
-                        if issue_type.lower() in DELIVERY_REQUIRED_ISSUES and order_status != "delivered":
+                        # Guard: check if ANY delivery keyword is contained in the issue_type
+                        is_delivery_issue = any(kw in issue_type.lower() for kw in DELIVERY_REQUIRED_KEYWORDS)
+                        if is_delivery_issue and order_status != "delivered":
                             return {
                                 "success": False,
                                 "message": f"Order {order_id} has status '{order_status}' and has not been delivered yet. "
-                                           f"Please wait for delivery before reporting a {issue_type} issue. "
+                                           f"Please wait for delivery before reporting a {issue_type.replace('_', ' ')} issue. "
                                            f"If your order is significantly delayed, we can help with that instead."
                             }
                 
@@ -330,20 +331,20 @@ def get_analytics_summary() -> dict:
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # 1. Total Tickets Created
-                cur.execute("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'ticket_created'")
+                # 1. Count directly from support_tickets table (source of truth)
+                cur.execute("SELECT COUNT(*) FROM support_tickets")
                 total_tickets = int(cur.fetchone()[0] or 0)
 
-                # 2. Total Returns Initiated
-                cur.execute("SELECT COUNT(*) FROM analytics_events WHERE event_type = 'return_initiated'")
+                # 2. Count directly from refunds table (source of truth)
+                cur.execute("SELECT COUNT(*) FROM refunds")
                 total_returns = int(cur.fetchone()[0] or 0)
 
-                # 3. Average Latency (Convert Decimal to Int)
+                # 3. Average Latency from analytics_events
                 cur.execute("SELECT AVG(duration_ms) FROM analytics_events WHERE duration_ms IS NOT NULL")
                 avg_latency_raw = cur.fetchone()[0]
                 avg_latency = round(float(avg_latency_raw)) if avg_latency_raw is not None else 0
 
-                # 4. Most Common Intent
+                # 4. Most Common Intent from analytics_events
                 cur.execute("""
                     SELECT intent, COUNT(*) as count 
                     FROM analytics_events 
@@ -362,4 +363,5 @@ def get_analytics_summary() -> dict:
                     "most_common_intent": top_intent
                 }
     except Exception as e:
+        logger.error(f"Analytics query failed: {e}")
         return {"error": "Could not retrieve analytics data."}
