@@ -52,17 +52,23 @@ def agent_node(state: AgentState) -> AgentState:
         state["order_id"] = None
 
     # PERSISTENCE OPTIMIZATION: Keep only the last 15 messages in the DB state
-    # This prevents the Postgres database from growing indefinitely.
+    # We use a "Safe Cut" approach to ensure we don't break tool-call chains.
     messages_to_remove = []
     if len(state["messages"]) > 15:
-        # We leave the last 15 messages, and remove the rest.
-        # However, we must never remove a message if the last one is a tool call
-        # to prevent breaking the ReAct loop logic.
-        num_to_remove = len(state["messages"]) - 15
-        for i in range(num_to_remove):
-            m = state["messages"][i]
-            # Safety: Don't remove if we are in the middle of a tool chain
-            messages_to_remove.append(RemoveMessage(id=m.id))
+        # Determine the cutoff point
+        cutoff = len(state["messages"]) - 15
+        
+        # Find the nearest HumanMessage at or after the cutoff to ensure a clean start
+        safe_cutoff = 0
+        for i in range(cutoff, len(state["messages"])):
+            if isinstance(state["messages"][i], HumanMessage):
+                safe_cutoff = i
+                break
+        
+        if safe_cutoff > 0:
+            for i in range(safe_cutoff):
+                m = state["messages"][i]
+                messages_to_remove.append(RemoveMessage(id=m.id))
 
     messages = [SystemMessage(content=AGENT_SYSTEM_PROMPT)] + state["messages"]
     response = agent_llm.invoke(messages)
