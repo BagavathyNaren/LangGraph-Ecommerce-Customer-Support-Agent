@@ -208,65 +208,117 @@ function App() {
     scrollToBottom()
   }, [messages])
 
-  // ═══ Text-to-Speech with British voice + JARVIS auto-listen ═══
-  // KEY FIX: Use setTimeout after cancel() to give Chrome time to flush the queue.
-  // Calling speak() immediately after cancel() is a well-known Chrome bug that causes silence.
+  // ═══ Text-to-Speech — Robust Chunked Implementation ═══
+  // Fixes 4 root-cause bugs:
+  // 1. LONG TEXT SILENCE: Chrome silently drops speech after ~14s. We split into sentence chunks.
+  // 2. VOICE NOT READY: Voice may not be loaded on first call. We force-pick before speaking.
+  // 3. CANCEL RACE: cancel()+speak() in 80ms is unreliable. We poll speechSynthesis.speaking flag.
+  // 4. MUFFLED RATE: rate=0.88 causes bass muffle. Natural rate=1.0 + pitch=1.05 is crisp.
+
+  // Helper: split cleaned text into sentence-sized chunks (max 160 chars each)
+  // Splits at sentence boundaries to keep speech sounding natural.
+  const chunkText = (text) => {
+    const cleaned = cleanTextForSpeech(text)
+    if (!cleaned.trim()) return []
+    // Split at sentence-ending punctuation, keeping the delimiter with the chunk
+    const sentences = cleaned.match(/[^.!?;]+[.!?;]*/g) || [cleaned]
+    const chunks = []
+    let current = ''
+    for (const sentence of sentences) {
+      if ((current + sentence).length > 160 && current.length > 0) {
+        chunks.push(current.trim())
+        current = sentence
+      } else {
+        current += sentence
+      }
+    }
+    if (current.trim()) chunks.push(current.trim())
+    return chunks
+  }
+
+  // Helper: ensure a voice is selected (handles first-render timing where voices aren't ready)
+  const ensureVoice = () => {
+    if (selectedVoiceRef.current) return selectedVoiceRef.current
+    const voices = window.speechSynthesis.getVoices()
+    if (!voices.length) return null
+    const best =
+      voices.find(v => v.name.toLowerCase() === 'google uk english male') ||
+      voices.find(v => ['google uk english female', 'microsoft ryan online', 'google us english', 'microsoft ryan', 'daniel', 'james'].some(p => v.name.toLowerCase().includes(p))) ||
+      voices.find(v => v.lang.toLowerCase().includes('en-gb')) ||
+      voices.find(v => v.lang.toLowerCase().startsWith('en')) ||
+      voices[0]
+    selectedVoiceRef.current = best
+    return best
+  }
+
   const speak = (text) => {
     if (!voiceEnabled && !jarvisModeRef.current) return
 
-    // Stop any current speech
+    const chunks = chunkText(text)
+    if (!chunks.length) return
+
+    // Flush any existing speech, then wait for the engine to become idle before queuing
     window.speechSynthesis.cancel()
 
-    const doSpeak = () => {
-      const cleanText = cleanTextForSpeech(text)
-      if (!cleanText.trim()) return
+    const speakChunks = () => {
+      const voice = ensureVoice()
+      let chunkIndex = 0
+      const isJarvis = jarvisModeRef.current
 
-      const utterance = new SpeechSynthesisUtterance(cleanText)
+      if (isJarvis) setJarvisState('speaking')
 
-      // Always assign voice explicitly to prevent browser defaulting to a silent/wrong voice
-      const voice = selectedVoiceRef.current
-      if (voice) utterance.voice = voice
-
-      utterance.volume = 1.0   // Full volume
-      utterance.rate   = 0.88  // Slightly slower — clearer and more natural
-      utterance.pitch  = 1.0   // Neutral pitch — avoids the muffled low-pitch bug
-
-      if (jarvisModeRef.current) {
-        setJarvisState('speaking')
-
-        const onEndOrError = () => {
-          setJarvisState('idle')
-          // Auto-listen loop: restart mic after JARVIS finishes speaking
-          setTimeout(() => {
-            if (jarvisModeRef.current) startListening()
-          }, 900)
+      const speakNext = () => {
+        if (chunkIndex >= chunks.length) {
+          // All chunks done — JARVIS auto-listen restarts here (after LAST chunk)
+          if (isJarvis && jarvisModeRef.current) {
+            setJarvisState('idle')
+            setTimeout(() => {
+              if (jarvisModeRef.current) startListening()
+            }, 700)
+          }
+          return
         }
 
-        utterance.onend  = onEndOrError
+        const chunkStr = chunks[chunkIndex++]
+        const utterance = new SpeechSynthesisUtterance(chunkStr)
+
+        // Explicitly set voice on every chunk (Chrome sometimes forgets between chunks)
+        if (voice) utterance.voice = voice
+
+        utterance.volume = 1.0   // Full volume — never reduce this
+        utterance.rate   = 1.0   // Natural rate — avoids muffled bass sound
+        utterance.pitch  = 1.05  // Slightly above neutral — clearer & crisper
+
+        utterance.onend = () => speakNext()
         utterance.onerror = (e) => {
-          console.warn('TTS error (JARVIS):', e.error)
-          // Only restart if it wasn't intentionally cancelled
-          if (e.error !== 'interrupted' && e.error !== 'canceled') onEndOrError()
+          console.warn(`TTS chunk ${chunkIndex} error:`, e.error)
+          // Skip broken chunk and continue with the rest
+          if (e.error !== 'interrupted' && e.error !== 'canceled') {
+            speakNext()
+          } else {
+            // Was intentionally stopped — abort all chunks
+            if (isJarvis && jarvisModeRef.current) {
+              setJarvisState('idle')
+            }
+          }
         }
-      } else {
-        utterance.onerror = (e) => {
-          console.warn('TTS error (normal):', e.error)
-        }
+
+        window.speechSynthesis.speak(utterance)
       }
 
-      window.speechSynthesis.speak(utterance)
-
-      // Chrome watchdog: if paused after 500ms, force-resume
-      setTimeout(() => {
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume()
-        }
-      }, 500)
+      speakNext()
     }
 
-    // ✅ Critical: wait 80ms after cancel() before speaking to let Chrome flush the queue
-    // Without this delay, Chrome often plays silence or drops the utterance entirely.
-    setTimeout(doSpeak, 80)
+    // Poll until speechSynthesis.speaking becomes false (max 300ms wait)
+    // This is more reliable than a fixed setTimeout delay
+    let waited = 0
+    const waitForIdle = setInterval(() => {
+      waited += 20
+      if (!window.speechSynthesis.speaking || waited >= 300) {
+        clearInterval(waitForIdle)
+        speakChunks()
+      }
+    }, 20)
   }
 
   // ═══ Mic controls ═══
