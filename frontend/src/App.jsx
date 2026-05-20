@@ -45,7 +45,7 @@ function App() {
   const messagesEndRef = useRef(null)
   const recognitionRef = useRef(null)
   const silenceTimerRef = useRef(null)
-  const selectedVoiceRef = useRef(null)
+  const currentAudioRef = useRef(null)   // Tracks the currently playing Audio element
   const jarvisModeRef = useRef(false)
   const sendMessageRef = useRef(null)
   const isLoadingRef = useRef(false)
@@ -89,44 +89,9 @@ function App() {
   const generateId = () => 'thread-' + Math.random().toString(36).substr(2, 9)
   const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-  // ═══ Select best British English voice (Prioritizing offline/localService for zero-latency) ═══
-  useEffect(() => {
-    const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices()
-      if (voices.length === 0) return
-
-      // Prioritize high-quality voices (Google/Microsoft online voices are much louder and clearer)
-      // 1. Try premium Google UK English Male voice first
-      let best = voices.find(v => v.name.toLowerCase() === 'google uk english male')
-
-      // 2. Try other premium online voices
-      if (!best) {
-        const premiumOnline = ['google uk english female', 'microsoft ryan online', 'google us english', 'microsoft ryan', 'daniel', 'james']
-        for (const pref of premiumOnline) {
-          best = voices.find(v => v.name.toLowerCase().includes(pref))
-          if (best) break
-        }
-      }
-
-      // 3. Try any en-GB local voice
-      if (!best) best = voices.find(v => v.lang.toLowerCase().includes('en-gb') && v.localService === true)
-      
-      // 4. Try any en-* local voice
-      if (!best) best = voices.find(v => v.lang.toLowerCase().startsWith('en') && v.localService === true)
-
-      // 5. Fallback to any en-GB voice
-      if (!best) best = voices.find(v => v.lang.toLowerCase().includes('en-gb'))
-
-      // 6. Ultimate fallback
-      if (!best) best = voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0]
-
-      selectedVoiceRef.current = best
-      console.log('Voice selected:', best?.name, best?.lang, 'localService:', best?.localService)
-    }
-
-    loadVoices()
-    window.speechSynthesis.onvoiceschanged = loadVoices
-  }, [])
+  // NOTE: Voice selection via Web Speech API removed.
+  // We now use StreamElements cloud TTS (Brian — British male MP3)
+  // which bypasses ALL browser TTS bugs and plays at full system volume.
 
   // ═══ Initialize Speech Recognition with Auto-Submit in Both Modes ═══
   useEffect(() => {
@@ -208,117 +173,86 @@ function App() {
     scrollToBottom()
   }, [messages])
 
-  // ═══ Text-to-Speech — Robust Chunked Implementation ═══
-  // Fixes 4 root-cause bugs:
-  // 1. LONG TEXT SILENCE: Chrome silently drops speech after ~14s. We split into sentence chunks.
-  // 2. VOICE NOT READY: Voice may not be loaded on first call. We force-pick before speaking.
-  // 3. CANCEL RACE: cancel()+speak() in 80ms is unreliable. We poll speechSynthesis.speaking flag.
-  // 4. MUFFLED RATE: rate=0.88 causes bass muffle. Natural rate=1.0 + pitch=1.05 is crisp.
+  // ═══ Text-to-Speech — StreamElements Cloud TTS (Brian, British Male) ═══
+  // Why: Browser Web Speech API is fundamentally broken for volume/quality.
+  // StreamElements returns a real MP3 (Brian voice) played via HTML5 Audio API.
+  // This guarantees: loud volume, clear audio, no Chrome bugs, consistent voice.
 
-  // Helper: split cleaned text into sentence-sized chunks (max 160 chars each)
-  // Splits at sentence boundaries to keep speech sounding natural.
-  const chunkText = (text) => {
+  // Stop any currently playing audio immediately
+  const stopAudio = () => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current.src = ''
+      currentAudioRef.current = null
+    }
+  }
+
+  // Split text into chunks ≤ 200 chars at sentence boundaries
+  const buildChunks = (text) => {
     const cleaned = cleanTextForSpeech(text)
     if (!cleaned.trim()) return []
-    // Split at sentence-ending punctuation, keeping the delimiter with the chunk
     const sentences = cleaned.match(/[^.!?;]+[.!?;]*/g) || [cleaned]
     const chunks = []
-    let current = ''
-    for (const sentence of sentences) {
-      if ((current + sentence).length > 160 && current.length > 0) {
-        chunks.push(current.trim())
-        current = sentence
-      } else {
-        current += sentence
-      }
+    let cur = ''
+    for (const s of sentences) {
+      if ((cur + s).length > 190 && cur) { chunks.push(cur.trim()); cur = s }
+      else cur += s
     }
-    if (current.trim()) chunks.push(current.trim())
+    if (cur.trim()) chunks.push(cur.trim())
     return chunks
   }
 
-  // Helper: ensure a voice is selected (handles first-render timing where voices aren't ready)
-  const ensureVoice = () => {
-    if (selectedVoiceRef.current) return selectedVoiceRef.current
-    const voices = window.speechSynthesis.getVoices()
-    if (!voices.length) return null
-    const best =
-      voices.find(v => v.name.toLowerCase() === 'google uk english male') ||
-      voices.find(v => ['google uk english female', 'microsoft ryan online', 'google us english', 'microsoft ryan', 'daniel', 'james'].some(p => v.name.toLowerCase().includes(p))) ||
-      voices.find(v => v.lang.toLowerCase().includes('en-gb')) ||
-      voices.find(v => v.lang.toLowerCase().startsWith('en')) ||
-      voices[0]
-    selectedVoiceRef.current = best
-    return best
-  }
-
-  const speak = (text) => {
+  const speak = async (text) => {
     if (!voiceEnabled && !jarvisModeRef.current) return
+    stopAudio()
 
-    const chunks = chunkText(text)
+    const chunks = buildChunks(text)
     if (!chunks.length) return
 
-    // Flush any existing speech, then wait for the engine to become idle before queuing
-    window.speechSynthesis.cancel()
+    const isJarvis = jarvisModeRef.current
+    if (isJarvis) setJarvisState('speaking')
 
-    const speakChunks = () => {
-      const voice = ensureVoice()
-      let chunkIndex = 0
-      const isJarvis = jarvisModeRef.current
-
-      if (isJarvis) setJarvisState('speaking')
-
-      const speakNext = () => {
-        if (chunkIndex >= chunks.length) {
-          // All chunks done — JARVIS auto-listen restarts here (after LAST chunk)
-          if (isJarvis && jarvisModeRef.current) {
-            setJarvisState('idle')
-            setTimeout(() => {
-              if (jarvisModeRef.current) startListening()
-            }, 700)
-          }
-          return
+    // Play chunks sequentially — each chunk fires the next via onended
+    const playChunk = async (index) => {
+      if (index >= chunks.length) {
+        // All done — restart JARVIS mic
+        if (isJarvis && jarvisModeRef.current) {
+          setJarvisState('idle')
+          setTimeout(() => { if (jarvisModeRef.current) startListening() }, 700)
         }
-
-        const chunkStr = chunks[chunkIndex++]
-        const utterance = new SpeechSynthesisUtterance(chunkStr)
-
-        // Explicitly set voice on every chunk (Chrome sometimes forgets between chunks)
-        if (voice) utterance.voice = voice
-
-        utterance.volume = 1.0   // Full volume — never reduce this
-        utterance.rate   = 1.0   // Natural rate — avoids muffled bass sound
-        utterance.pitch  = 1.05  // Slightly above neutral — clearer & crisper
-
-        utterance.onend = () => speakNext()
-        utterance.onerror = (e) => {
-          console.warn(`TTS chunk ${chunkIndex} error:`, e.error)
-          // Skip broken chunk and continue with the rest
-          if (e.error !== 'interrupted' && e.error !== 'canceled') {
-            speakNext()
-          } else {
-            // Was intentionally stopped — abort all chunks
-            if (isJarvis && jarvisModeRef.current) {
-              setJarvisState('idle')
-            }
-          }
-        }
-
-        window.speechSynthesis.speak(utterance)
+        return
       }
 
-      speakNext()
+      const chunk = chunks[index]
+      // StreamElements TTS: Brian = British male, loud clear MP3, free, no API key
+      const ttsUrl = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(chunk)}`
+
+      try {
+        const audio = new Audio(ttsUrl)
+        audio.volume = 1.0
+        currentAudioRef.current = audio
+
+        await new Promise((resolve) => {
+          audio.onended = resolve
+          audio.onerror = (e) => {
+            console.warn('StreamElements TTS error on chunk', index, e)
+            resolve() // skip broken chunk, continue
+          }
+          audio.play().catch((e) => {
+            console.warn('Audio play() rejected:', e)
+            resolve()
+          })
+        })
+
+        currentAudioRef.current = null
+        await playChunk(index + 1)
+      } catch (e) {
+        console.error('TTS chunk failed:', e)
+        await playChunk(index + 1)
+      }
     }
 
-    // Poll until speechSynthesis.speaking becomes false (max 300ms wait)
-    // This is more reliable than a fixed setTimeout delay
-    let waited = 0
-    const waitForIdle = setInterval(() => {
-      waited += 20
-      if (!window.speechSynthesis.speaking || waited >= 300) {
-        clearInterval(waitForIdle)
-        speakChunks()
-      }
-    }, 20)
+    await playChunk(0)
   }
 
   // ═══ Mic controls ═══
@@ -342,6 +276,7 @@ function App() {
     }
     setIsListening(false)
     if (jarvisModeRef.current) setJarvisState('idle')
+    stopAudio()
   }
 
   const toggleListening = () => {
@@ -357,7 +292,7 @@ function App() {
     if (jarvisMode) {
       // Exit JARVIS mode
       stopListening()
-      window.speechSynthesis.cancel()
+      stopAudio()
       setJarvisState('idle')
       setJarvisMode(false)
     } else {
@@ -381,7 +316,7 @@ function App() {
       timestamp: now()
     }])
     stopListening()
-    window.speechSynthesis.cancel()
+    stopAudio()
     setJarvisState('idle')
   }
 
