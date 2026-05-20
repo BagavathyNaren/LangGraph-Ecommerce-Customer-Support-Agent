@@ -180,9 +180,10 @@ function App() {
 
   // Stop any currently playing audio immediately
   const stopAudio = () => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause()
-      currentAudioRef.current.src = ''
+    const cur = currentAudioRef.current
+    if (cur) {
+      if (cur._abort) cur._abort()       // Cancel in-flight TTS fetch
+      else { cur.pause(); cur.src = '' } // Stop a playing Audio element
       currentAudioRef.current = null
     }
   }
@@ -209,13 +210,19 @@ function App() {
     const chunks = buildChunks(text)
     if (!chunks.length) return
 
+    const BASE_URL = 'https://ecommerce-support-agent-93337753347.us-central1.run.app'
     const isJarvis = jarvisModeRef.current
     if (isJarvis) setJarvisState('speaking')
 
-    // Play chunks sequentially — each chunk fires the next via onended
+    // AbortController so stopAudio() can cancel any in-flight fetch
+    const abortCtrl = new AbortController()
+
+    // Play chunks sequentially via backend /tts proxy → blob URL
+    // Using blob: URLs bypasses ALL autoplay restrictions and CORS issues
     const playChunk = async (index) => {
+      if (abortCtrl.signal.aborted) return
       if (index >= chunks.length) {
-        // All done — restart JARVIS mic
+        // All chunks done — restart JARVIS mic
         if (isJarvis && jarvisModeRef.current) {
           setJarvisState('idle')
           setTimeout(() => { if (jarvisModeRef.current) startListening() }, 700)
@@ -224,34 +231,46 @@ function App() {
       }
 
       const chunk = chunks[index]
-      // StreamElements TTS: Brian = British male, loud clear MP3, free, no API key
-      const ttsUrl = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(chunk)}`
-
+      let blobUrl = null
       try {
-        const audio = new Audio(ttsUrl)
+        // Fetch MP3 from our own backend proxy (no CORS issues, same origin)
+        const resp = await fetch(
+          `${BASE_URL}/tts?text=${encodeURIComponent(chunk)}`,
+          { signal: abortCtrl.signal }
+        )
+        if (!resp.ok) throw new Error(`TTS fetch failed: ${resp.status}`)
+        const blob = await resp.blob()
+        blobUrl = URL.createObjectURL(blob)
+
+        const audio = new Audio(blobUrl)
         audio.volume = 1.0
         currentAudioRef.current = audio
 
         await new Promise((resolve) => {
           audio.onended = resolve
           audio.onerror = (e) => {
-            console.warn('StreamElements TTS error on chunk', index, e)
-            resolve() // skip broken chunk, continue
+            console.warn('Audio playback error chunk', index, e)
+            resolve()
           }
+          // play() always succeeds with blob: URLs (same-origin, not cross-origin)
           audio.play().catch((e) => {
-            console.warn('Audio play() rejected:', e)
+            console.warn('Audio.play() rejected:', e)
             resolve()
           })
         })
-
-        currentAudioRef.current = null
-        await playChunk(index + 1)
       } catch (e) {
-        console.error('TTS chunk failed:', e)
-        await playChunk(index + 1)
+        if (e.name === 'AbortError') return  // stopAudio() was called, bail out
+        console.error('TTS chunk error:', e)
+      } finally {
+        if (blobUrl) URL.revokeObjectURL(blobUrl)
+        currentAudioRef.current = null
       }
+
+      await playChunk(index + 1)
     }
 
+    // Store abort function so stopAudio() can cancel in-flight fetches
+    currentAudioRef.current = { _abort: () => abortCtrl.abort() }
     await playChunk(0)
   }
 

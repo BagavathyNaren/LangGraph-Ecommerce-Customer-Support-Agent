@@ -120,6 +120,30 @@ class ChatRequest(BaseModel):
                 raise ValueError("Invalid email address format.")
         return v
 
+@app.get("/tts")
+async def tts_proxy(text: str):
+    """
+    Proxy TTS audio through the backend to avoid browser CORS + autoplay restrictions.
+    Fetches from StreamElements (Brian = British male voice) and streams MP3 back to client.
+    """
+    import requests as req
+    from fastapi.responses import Response as FastResponse
+    try:
+        url = f"https://api.streamelements.com/kappa/v2/speech?voice=Brian&text={req.utils.quote(text)}"
+        r = req.get(url, timeout=10)
+        r.raise_for_status()
+        return FastResponse(
+            content=r.content,
+            media_type="audio/mpeg",
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
+    except Exception as e:
+        logger.warning(f"TTS proxy error: {e}")
+        raise HTTPException(status_code=502, detail="TTS service unavailable")
+
 @app.get("/")
 def root():
     return FileResponse("frontend/dist/index.html")
