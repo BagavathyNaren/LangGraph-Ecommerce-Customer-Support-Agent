@@ -123,14 +123,28 @@ class ChatRequest(BaseModel):
 @app.get("/tts")
 async def tts_proxy(text: str):
     """
-    Proxy TTS audio through the backend to avoid browser CORS + autoplay restrictions.
-    Fetches from StreamElements (Brian = British male voice) and streams MP3 back to client.
+    Proxy TTS audio through the backend using OpenAI's TTS API.
+    Uses the 'onyx' voice (deep male) for loud and clear output.
     """
     import requests as req
     from fastapi.responses import Response as FastResponse
     try:
-        url = f"https://api.streamelements.com/kappa/v2/speech?voice=Brian&text={req.utils.quote(text)}"
-        r = req.get(url, timeout=10)
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set")
+            
+        url = "https://api.openai.com/v1/audio/speech"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "tts-1",
+            "input": text,
+            "voice": "onyx",
+            "response_format": "mp3"
+        }
+        r = req.post(url, headers=headers, json=data, timeout=15)
         r.raise_for_status()
         return FastResponse(
             content=r.content,
