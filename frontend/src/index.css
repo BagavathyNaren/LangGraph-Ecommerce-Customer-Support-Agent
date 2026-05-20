@@ -1,0 +1,276 @@
+@import "tailwindcss";
+
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #0f172a;
+  background-color: #f8fafc;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh; /* dynamic viewport height for mobile browsers */
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+/* Allow vertical scrolling on small devices */
+@media (max-width: 768px) {
+  body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+#root {
+  width: 100%;
+}
+
+.glass {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.2); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.35); }
+
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: currentColor;
+  margin-left: 2px;
+  animation: blink 0.8s infinite;
+  vertical-align: middle;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ═══════════════════════════════════════════════════════════
+   JARVIS Avatar — Arc Reactor Style
+   ═══════════════════════════════════════════════════════════ */
+
+.jarvis-avatar {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .jarvis-avatar {
+    width: 220px;
+    height: 220px;
+  }
+}
+
+/* Core Orb */
+.jarvis-core {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ff4444 0%, #cc0000 40%, #880000 100%);
+  box-shadow:
+    0 0 30px rgba(255, 0, 0, 0.5),
+    0 0 60px rgba(255, 0, 0, 0.25),
+    inset 0 0 15px rgba(255, 100, 100, 0.3);
+  z-index: 2;
+  transition: all 0.5s ease;
+}
+
+@media (min-width: 640px) {
+  .jarvis-core {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* Concentric Rings */
+.jarvis-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: all 0.5s ease;
+}
+
+.jarvis-ring-1 {
+  width: 90px;
+  height: 90px;
+  border-top-color: rgba(255, 60, 60, 0.7);
+  border-right-color: rgba(255, 60, 60, 0.2);
+  animation: jarvis-spin 3s linear infinite;
+}
+
+.jarvis-ring-2 {
+  width: 130px;
+  height: 130px;
+  border-top-color: rgba(255, 100, 100, 0.5);
+  border-left-color: rgba(255, 100, 100, 0.15);
+  animation: jarvis-spin 4.5s linear infinite reverse;
+}
+
+.jarvis-ring-3 {
+  width: 170px;
+  height: 170px;
+  border-bottom-color: rgba(255, 140, 140, 0.35);
+  border-right-color: rgba(255, 140, 140, 0.1);
+  animation: jarvis-spin 6s linear infinite;
+}
+
+@media (min-width: 640px) {
+  .jarvis-ring-1 { width: 110px; height: 110px; }
+  .jarvis-ring-2 { width: 155px; height: 155px; }
+  .jarvis-ring-3 { width: 200px; height: 200px; }
+}
+
+@keyframes jarvis-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Idle state (default — slow pulse) ─── */
+.jarvis-idle .jarvis-core {
+  animation: jarvis-pulse-idle 3s ease-in-out infinite;
+}
+
+@keyframes jarvis-pulse-idle {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(255, 0, 0, 0.4), 0 0 60px rgba(255, 0, 0, 0.2); }
+  50% { transform: scale(1.05); box-shadow: 0 0 40px rgba(255, 0, 0, 0.5), 0 0 80px rgba(255, 0, 0, 0.25); }
+}
+
+/* ─── Listening state (bright pulse, fast spin) ─── */
+.jarvis-listening .jarvis-core {
+  background: radial-gradient(circle at 35% 35%, #ff5555 0%, #ee0000 40%, #aa0000 100%);
+  box-shadow:
+    0 0 50px rgba(255, 0, 0, 0.7),
+    0 0 100px rgba(255, 0, 0, 0.35),
+    inset 0 0 20px rgba(255, 150, 150, 0.4);
+  animation: jarvis-pulse-listen 1s ease-in-out infinite;
+}
+
+.jarvis-listening .jarvis-ring-1 {
+  animation-duration: 1s;
+  border-top-color: rgba(255, 60, 60, 0.9);
+}
+.jarvis-listening .jarvis-ring-2 {
+  animation-duration: 1.5s;
+  border-top-color: rgba(255, 100, 100, 0.7);
+}
+.jarvis-listening .jarvis-ring-3 {
+  animation-duration: 2s;
+  border-bottom-color: rgba(255, 140, 140, 0.5);
+}
+
+@keyframes jarvis-pulse-listen {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+/* ─── Processing state (amber/orange pulse) ─── */
+.jarvis-processing .jarvis-core {
+  background: radial-gradient(circle at 35% 35%, #ffaa33 0%, #ee8800 40%, #995500 100%);
+  box-shadow:
+    0 0 50px rgba(255, 153, 0, 0.6),
+    0 0 100px rgba(255, 153, 0, 0.3),
+    inset 0 0 15px rgba(255, 200, 100, 0.3);
+  animation: jarvis-pulse-process 0.8s ease-in-out infinite;
+}
+
+.jarvis-processing .jarvis-ring-1,
+.jarvis-processing .jarvis-ring-2,
+.jarvis-processing .jarvis-ring-3 {
+  border-top-color: rgba(255, 170, 50, 0.6);
+  border-bottom-color: rgba(255, 170, 50, 0.3);
+}
+
+@keyframes jarvis-pulse-process {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+/* ─── Speaking state (ripple outward) ─── */
+.jarvis-speaking .jarvis-core {
+  background: radial-gradient(circle at 35% 35%, #ff4444 0%, #dd0000 40%, #990000 100%);
+  box-shadow:
+    0 0 60px rgba(255, 0, 0, 0.8),
+    0 0 120px rgba(255, 0, 0, 0.4),
+    0 0 200px rgba(255, 0, 0, 0.15),
+    inset 0 0 20px rgba(255, 150, 150, 0.5);
+  animation: jarvis-pulse-speak 1.2s ease-in-out infinite;
+}
+
+.jarvis-speaking .jarvis-ring-1 {
+  animation: jarvis-ripple 1.8s ease-out infinite;
+  border-top-color: rgba(255, 80, 80, 0.8);
+  border-right-color: rgba(255, 80, 80, 0.4);
+}
+.jarvis-speaking .jarvis-ring-2 {
+  animation: jarvis-ripple 2.2s ease-out 0.3s infinite;
+  border-top-color: rgba(255, 100, 100, 0.6);
+  border-left-color: rgba(255, 100, 100, 0.3);
+}
+.jarvis-speaking .jarvis-ring-3 {
+  animation: jarvis-ripple 2.6s ease-out 0.6s infinite;
+  border-bottom-color: rgba(255, 140, 140, 0.4);
+  border-right-color: rgba(255, 140, 140, 0.2);
+}
+
+@keyframes jarvis-pulse-speak {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes jarvis-ripple {
+  0% { transform: scale(1) rotate(0deg); opacity: 1; }
+  70% { opacity: 0.5; }
+  100% { transform: scale(1.2) rotate(360deg); opacity: 0.2; }
+}
+
+/* Ambient background glow behind the avatar */
+.jarvis-glow {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 0, 0, 0.08) 0%, transparent 70%);
+  filter: blur(40px);
+  z-index: 0;
+  transition: all 0.5s ease;
+  pointer-events: none;
+}
+
+.jarvis-listening .jarvis-glow {
+  background: radial-gradient(circle, rgba(255, 0, 0, 0.15) 0%, transparent 70%);
+  width: 350px;
+  height: 350px;
+}
+
+.jarvis-speaking .jarvis-glow {
+  background: radial-gradient(circle, rgba(255, 0, 0, 0.2) 0%, transparent 70%);
+  width: 400px;
+  height: 400px;
+  animation: jarvis-glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes jarvis-glow-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}

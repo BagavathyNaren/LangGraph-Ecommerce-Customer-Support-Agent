@@ -4,13 +4,22 @@ from graph.state import AgentState
 from graph.nodes import agent_node, tool_node, escalation_check, escalate
 from graph.edges import should_continue, route_escalation
 from tools.db import get_pool
+from logger import get_logger
 import os
+
+logger = get_logger("graph_builder")
 
 def build_graph():
     pool = get_pool()
 
     checkpointer = PostgresSaver(pool)
-    checkpointer.setup()
+    try:
+        checkpointer.setup()
+    except Exception as e:
+        logger.warning(
+            f"Checkpointer setup warning: {e}. "
+            "Application startup will continue. If tables are already initialized, queries will succeed."
+        )
 
     graph = StateGraph(AgentState)
 

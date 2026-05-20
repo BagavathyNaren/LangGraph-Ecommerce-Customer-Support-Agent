@@ -1,214 +1,371 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>E-Commerce Support Agent</title>
+  <title>Agentic Support | AI Store</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; }
-    .chat-container { width: 100%; max-width: 700px; height: 90vh; background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
-    .chat-header { background: #1a73e8; color: white; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
-    .chat-header .avatar { width: 40px; height: 40px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-    .chat-header h2 { font-size: 16px; }
-    .chat-header p { font-size: 12px; opacity: 0.85; }
-    .thread-bar { padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e0e0e0; font-size: 12px; color: #5f6368; display: flex; justify-content: space-between; align-items: center; }
-    .thread-bar span { font-weight: 600; color: #1a73e8; }
-    .thread-bar button { background: none; border: none; color: #1a73e8; cursor: pointer; font-size: 12px; }
-    .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    .message-row { display: flex; flex-direction: column; }
-    .message-row.user { align-items: flex-end; }
-    .message-row.agent { align-items: flex-start; }
-    .bubble { max-width: 75%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; }
-    .message-row.user .bubble { background: #1a73e8; color: white; border-bottom-right-radius: 4px; }
-    .message-row.agent .bubble { background: #f1f3f4; color: #202124; border-bottom-left-radius: 4px; }
-    .bubble.escalated { background: #fce8e6; color: #c5221f; border-left: 4px solid #ea4335; border-bottom-left-radius: 4px; }
-    .badge-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-    .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
-    .badge.escalated { background: #fce8e6; color: #c5221f; }
-    .badge.intent { background: #e8f0fe; color: #1a73e8; }
-    .badge.order { background: #e6f4ea; color: #137333; }
-    .badge.cache { background: #fef7e0; color: #b06000; }
-    .timestamp { font-size: 10px; color: #9aa0a6; margin-top: 4px; }
-    .chat-input { padding: 16px; border-top: 1px solid #e0e0e0; display: flex; gap: 10px; }
-    .chat-input input { flex: 1; padding: 10px 16px; border: 1px solid #dadce0; border-radius: 24px; font-size: 14px; outline: none; }
-    .chat-input input:focus { border-color: #1a73e8; }
-    .chat-input button { background: #1a73e8; color: white; border: none; border-radius: 24px; padding: 10px 24px; cursor: pointer; font-size: 14px; font-weight: 500; }
-    .chat-input button:disabled { background: #dadce0; cursor: not-allowed; }
-    .cursor { display: inline-block; width: 8px; height: 14px; background: #444; margin-left: 2px; animation: blink 0.8s infinite; vertical-align: middle; }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    
+    .glass {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .message-glow {
+      box-shadow: 0 0 20px -5px rgba(79, 70, 229, 0.2);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+    .cursor-blink {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: currentColor;
+      margin-left: 2px;
+      animation: blink 0.8s infinite;
+      vertical-align: middle;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
   </style>
 </head>
-<body>
-<div class="chat-container">
-  <div class="chat-header">
-    <div class="avatar">🛒</div>
-    <div>
-      <h2>E-Commerce Support Agent</h2>
-      <p>Powered by LangGraph + ReAct Design Architecture + GPT-4o-mini</p>
+<body class="bg-slate-950 text-slate-200 min-h-screen flex items-center justify-center p-4 md:p-8 overflow-hidden" 
+      x-data="chatApp()" x-init="init()">
+
+  <!-- Main App Container -->
+  <div class="relative w-full max-w-5xl h-[85vh] flex gap-6">
+    
+    <!-- Chat Section -->
+    <div class="flex-1 glass rounded-3xl overflow-hidden flex flex-direction-col flex-col relative shadow-2xl">
+      
+      <!-- Header -->
+      <header class="p-6 border-b border-white/5 flex justify-between items-center bg-white/5">
+        <div class="flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <i data-lucide="bot" class="text-white w-6 h-6"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight">AI Store Support</h1>
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">Agent Online</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <button @click="newSession()" class="p-2 hover:bg-white/10 rounded-lg transition-colors group relative" title="New Session">
+            <i data-lucide="refresh-cw" class="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors"></i>
+          </button>
+          <button @click="drawerOpen = !drawerOpen" class="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all">
+            <i data-lucide="sidebar" class="w-4 h-4 text-indigo-400"></i>
+            <span class="text-sm font-semibold">Details</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Messages Area -->
+      <main class="flex-1 overflow-y-auto p-6 space-y-6" id="messages-container" x-ref="messagesBox">
+        <template x-for="(msg, index) in messages" :key="index">
+          <div :class="msg.role === 'user' ? 'flex flex-col items-end' : 'flex flex-col items-start'">
+            
+            <!-- Message Bubble -->
+            <div :class="[
+              'max-w-[85%] md:max-w-[70%] p-4 rounded-2xl text-sm leading-relaxed transition-all duration-300',
+              msg.role === 'user' 
+                ? 'bg-indigo-600 text-white rounded-tr-none shadow-lg shadow-indigo-900/20' 
+                : 'bg-white/5 border border-white/10 text-slate-200 rounded-tl-none',
+              msg.isEscalated ? 'border-l-4 border-l-rose-500 bg-rose-500/5' : ''
+            ]" x-transition>
+              
+              <div x-html="renderMarkdown(msg.content)"></div>
+              <span x-show="msg.streaming" class="cursor-blink"></span>
+              
+              <!-- Badges -->
+              <div x-show="msg.metadata" class="flex flex-wrap gap-2 mt-3">
+                <template x-if="msg.metadata?.intent && msg.metadata.intent !== 'unclear'">
+                  <span class="px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-bold uppercase tracking-widest text-indigo-300 border border-white/10" x-text="msg.metadata.intent.replace('_', ' ')"></span>
+                </template>
+                <template x-if="msg.metadata?.order_id">
+                  <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-[10px] font-bold uppercase tracking-widest text-emerald-400 border border-emerald-500/20" x-text="'📦 ' + msg.metadata.order_id"></span>
+                </template>
+                <template x-if="msg.metadata?.cache_hit">
+                  <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-[10px] font-bold uppercase tracking-widest text-amber-400 border border-amber-500/20">⚡ Cached</span>
+                </template>
+              </div>
+            </div>
+            
+            <!-- Timestamp -->
+            <span class="text-[10px] text-slate-500 mt-1 px-1 font-medium" x-text="msg.timestamp"></span>
+          </div>
+        </template>
+      </main>
+
+      <!-- Input Area -->
+      <footer class="p-6 bg-slate-900/30 backdrop-blur-md border-t border-white/5">
+        <div class="relative group">
+          <input 
+            type="text" 
+            x-model="userInput"
+            @keydown.enter="sendMessage()"
+            :disabled="isLoading"
+            placeholder="Ask about returns, orders, or support..." 
+            class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 pr-32 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all placeholder:text-slate-600 text-sm disabled:opacity-50"
+          />
+          <div class="absolute right-2 top-2 flex gap-2">
+            <button 
+              @click="sendMessage()"
+              :disabled="isLoading || !userInput.trim()"
+              class="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white px-6 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+            >
+              <span x-text="isLoading ? 'Wait...' : 'Send'"></span>
+              <i data-lucide="send" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <p class="text-center text-[10px] text-slate-600 mt-4 font-medium uppercase tracking-widest">
+          End-to-end encrypted AI Support Environment
+        </p>
+      </footer>
     </div>
+
+    <!-- Details Sidebar (Drawer) -->
+    <aside 
+      x-show="drawerOpen"
+      x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0 translate-x-12"
+      x-transition:enter-end="opacity-100 translate-x-0"
+      x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="opacity-100 translate-x-0"
+      x-transition:leave-end="opacity-0 translate-x-12"
+      class="w-80 glass rounded-3xl overflow-hidden hidden lg:flex flex-col shadow-2xl"
+      x-cloak
+    >
+      <header class="p-6 border-b border-white/5 bg-white/5">
+        <h2 class="font-bold flex items-center gap-2">
+          <i data-lucide="activity" class="w-4 h-4 text-fuchsia-400"></i>
+          Session Context
+        </h2>
+      </header>
+      <div class="p-6 space-y-8 overflow-y-auto">
+        <!-- Session ID -->
+        <section>
+          <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 block">Current Thread</label>
+          <div class="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10">
+            <code class="text-xs text-indigo-300" x-text="threadId"></code>
+            <button @click="copyThread()" class="hover:text-white transition-colors">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </section>
+
+        <!-- Live Intelligence -->
+        <section>
+          <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 block">Extracted Context</label>
+          <div class="space-y-3">
+            <div class="bg-indigo-500/5 border border-indigo-500/10 p-3 rounded-xl flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-300">Last Intent</span>
+              <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest" x-text="lastIntent || 'Searching...'"></span>
+            </div>
+            <div class="bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-xl flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-300">Active Order</span>
+              <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest" x-text="lastOrderId || 'None'"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Status Card -->
+        <section class="bg-gradient-to-br from-indigo-600/20 to-fuchsia-600/20 p-4 rounded-2xl border border-white/10">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+              <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400"></i>
+            </div>
+            <span class="text-sm font-bold">Secure Access</span>
+          </div>
+          <p class="text-[10px] leading-relaxed text-slate-400">Your session is being monitored by our PII scrubbers to ensure your personal data remains private.</p>
+        </section>
+      </div>
+    </aside>
   </div>
-  <div class="thread-bar">
-    <span>Session: <span id="thread-id"></span></span>
-    <button onclick="newSession()">+ New Session</button>
-  </div>
-  <div class="chat-messages" id="messages">
-    <div class="message-row agent">
-      <div class="bubble">Hi! I'm your e-commerce support agent. Ask me about order status, returns, refunds, or cancellations.</div>
-    </div>
-  </div>
-  <div class="chat-input">
-    <input type="text" id="user-input" placeholder="Type your message..." onkeydown="if(event.key==='Enter') sendMessage()"/>
-    <button id="send-btn" onclick="sendMessage()">Send</button>
-  </div>
-</div>
 
-<script>
-  let threadId = generateId();
-  let currentController = null;
-  document.getElementById('thread-id').textContent = threadId;
+  <script>
+    function chatApp() {
+      return {
+        threadId: '',
+        userInput: '',
+        messages: [],
+        isLoading: false,
+        drawerOpen: true,
+        lastIntent: '',
+        lastOrderId: '',
+        
+        init() {
+          this.threadId = this.generateId();
+          this.messages = [{
+            role: 'agent',
+            content: "Hi! I'm your e-commerce support agent. Ask me about order status, returns, refunds, or cancellations.",
+            timestamp: this.now()
+          }];
+          lucide.createIcons();
+          
+          // Re-trigger icon updates after template changes
+          this.$watch('messages', () => this.$nextTick(() => lucide.createIcons()));
+        },
 
-  function generateId() {
-    return 'thread-' + Math.random().toString(36).substr(2, 9);
-  }
+        generateId() {
+          return 'thread-' + Math.random().toString(36).substr(2, 9);
+        },
 
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
+        now() {
+          return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        },
 
-  function renderMarkdown(text) {
-    // Escape HTML first for safety, then convert markdown to HTML
-    let html = escapeHtml(text);
-    // Bold: **text** → <strong>text</strong>
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // Numbered list items: "1. text" at start of line → formatted list item
-    html = html.replace(/^(\d+)\.\s+/gm, '<br><strong>$1.</strong> ');
-    // Line breaks
-    html = html.replace(/\n/g, '<br>');
-    // Clean up leading <br>
-    html = html.replace(/^(<br>)+/, '');
-    return html;
-  }
+        newSession() {
+          this.threadId = this.generateId();
+          this.messages = [{
+            role: 'agent',
+            content: "Hi! I'm your e-commerce support agent. Ask me about order status, returns, refunds, or cancellations.",
+            timestamp: this.now()
+          }];
+          this.lastIntent = '';
+          this.lastOrderId = '';
+        },
 
-  function newSession() {
-    threadId = generateId();
-    document.getElementById('thread-id').textContent = threadId;
-    document.getElementById('messages').innerHTML = `
-      <div class="message-row agent">
-        <div class="bubble">Hi! I'm your e-commerce support agent. Ask me about order status, returns, refunds, or cancellations.</div>
-      </div>`;
-  }
+        copyThread() {
+          navigator.clipboard.writeText(this.threadId);
+          // Optional: add a toast here
+        },
 
-  function now() {
-    return new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-  }
+        renderMarkdown(text) {
+          if (!text) return '';
+          let html = text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
 
-  async function sendMessage() {
-    const input = document.getElementById('user-input');
-    const btn = document.getElementById('send-btn');
-    const messages = document.getElementById('messages');
-    const text = input.value.trim();
-    if (!text) return;
+          html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold text-indigo-300">$1</strong>');
+          html = html.replace(/^(\d+)\.\s+/gm, '<br><strong class="text-fuchsia-400">$1.</strong> ');
+          html = html.replace(/\n/g, '<br>');
+          html = html.replace(/^(<br>)+/, '');
+          return html;
+        },
 
-    input.value = '';
-    btn.disabled = true;
+        async sendMessage() {
+          const text = this.userInput.trim();
+          if (!text || this.isLoading) return;
 
-    // User bubble — escape to prevent XSS
-    messages.innerHTML += `
-      <div class="message-row user">
-        <div class="bubble">${escapeHtml(text)}</div>
-        <div class="timestamp">${now()}</div>
-      </div>`;
+          this.userInput = '';
+          this.isLoading = true;
+          
+          // Add User Message
+          this.messages.push({
+            role: 'user',
+            content: text,
+            timestamp: this.now()
+          });
 
-    // Agent bubble placeholder
-    const row = document.createElement('div');
-    row.className = 'message-row agent';
-    row.id = 'streaming-row';
-    row.innerHTML = '<div class="bubble" id="streaming-bubble"><span class="cursor"></span></div>';
-    messages.appendChild(row);
-    messages.scrollTop = messages.scrollHeight;
+          this.scrollToBottom();
 
-    let fullText = '';
-    let metadata = {};
+          // Placeholder for AI response
+          const aiMessageIndex = this.messages.length;
+          this.messages.push({
+            role: 'agent',
+            content: '',
+            timestamp: this.now(),
+            streaming: true,
+            metadata: null,
+            isEscalated: false
+          });
 
-    try {
-      if (currentController) currentController.abort();
-      currentController = new AbortController();
-      const response = await fetch('/chat/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, thread_id: threadId }),
-        signal: currentController.signal
-      });
+          let fullText = '';
+          let metadata = {};
 
-      // Handle HTTP errors (400 blocked, 422 validation, 500 crash, etc.)
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        // Pydantic 422 returns detail as array of objects; HTTPException returns string
-        if (Array.isArray(errorData.detail)) {
-          fullText = errorData.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('. ');
-        } else {
-          fullText = errorData.detail || `Request failed (${response.status}). Please try again.`;
-        }
-      } else {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
+          try {
+            const response = await fetch('/chat/stream', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: text, thread_id: this.threadId })
+            });
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const lines = decoder.decode(value).split('\n\n');
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(trimmed.slice(6));
-                if (data.token) {
-                  fullText += data.token;
-                  document.getElementById('streaming-bubble').innerHTML = renderMarkdown(fullText) + '<span class="cursor"></span>';
-                  messages.scrollTop = messages.scrollHeight;
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              fullText = errorData.detail || `Request failed (${response.status}).`;
+            } else {
+              const reader = response.body.getReader();
+              const decoder = new TextDecoder();
+
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const lines = decoder.decode(value).split('\n\n');
+                for (const line of lines) {
+                  const trimmed = line.trim();
+                  if (trimmed.startsWith('data: ')) {
+                    try {
+                      const data = JSON.parse(trimmed.slice(6));
+                      if (data.token) {
+                        fullText += data.token;
+                        this.messages[aiMessageIndex].content = fullText;
+                        this.scrollToBottom();
+                      }
+                      if (data.done) {
+                        metadata = data;
+                      }
+                    } catch (e) {}
+                  }
                 }
-                if (data.done) {
-                  metadata = data;
-                }
-              } catch(e) {}
+              }
             }
+          } catch (e) {
+            fullText = 'Connection error. Please try again.';
           }
+
+          // Finalize
+          if (!fullText.trim()) fullText = 'Sorry, I could not process your request.';
+          
+          this.messages[aiMessageIndex].streaming = false;
+          this.messages[aiMessageIndex].content = fullText;
+          this.messages[aiMessageIndex].metadata = metadata;
+          this.messages[aiMessageIndex].isEscalated = metadata.escalated === true;
+          
+          if (metadata.intent) this.lastIntent = metadata.intent;
+          if (metadata.order_id && metadata.order_id !== 'null') this.lastOrderId = metadata.order_id;
+          
+          this.isLoading = false;
+          this.scrollToBottom();
+        },
+
+        scrollToBottom() {
+          this.$nextTick(() => {
+            const box = this.$refs.messagesBox;
+            box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+          });
         }
       }
-    } catch(e) {
-      if (e.name !== 'AbortError') {
-        fullText = 'Connection error. Please try again.';
-      }
     }
+  </script>
+</body>
+</html>
 
-    // Finalize bubble
-    if (!fullText || fullText.trim() === '') {
-      fullText = 'Sorry, I could not process your request. Please try asking about an order status, return, refund, or cancellation.';
-    }
-    const bubble = document.getElementById('streaming-bubble');
-    const isEscalated = metadata.escalated === true;
-    if (bubble) bubble.className = isEscalated ? 'bubble escalated' : 'bubble';
-    if (bubble) bubble.innerHTML = renderMarkdown(fullText);
-    if (bubble) bubble.removeAttribute('id');
-    // Build badges
-    const badges = [];
-    if (isEscalated) badges.push('<span class="badge escalated">🚨 Escalated</span>');
-    if (metadata.intent && metadata.intent !== 'unclear') badges.push(`<span class="badge intent">${metadata.intent.replace('_', ' ')}</span>`);
-    if (metadata.intent && metadata.intent !== 'unclear' && metadata.order_id && metadata.order_id !== 'null') badges.push(`<span class="badge order">📦 ${metadata.order_id}</span>`);
-    if (metadata.cache_hit) badges.push('<span class="badge cache">⚡ Cached</span>');
-
-    row.id = '';
-    row.innerHTML += `
-      ${badges.length ? `<div class="badge-row">${badges.join('')}</div>` : ''}
-      <div class="timestamp">${now()}</div>`;
-
-    btn.disabled = false;
-    messages.scrollTop = messages.scrollHeight;
-    input.focus();
-  }
-</script>
 </body>
 </html>

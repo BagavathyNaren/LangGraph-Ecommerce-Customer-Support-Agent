@@ -154,7 +154,7 @@ cython_debug/
 .vscode/
 
 # Project specific
-cache/
+# cache/ (Removed so it is uploaded for GCP)
 *.sqlite
 *.db
 evaluation/results/

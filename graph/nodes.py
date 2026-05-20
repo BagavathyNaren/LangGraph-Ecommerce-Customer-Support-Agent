@@ -16,21 +16,44 @@ You handle: order status, returns, refunds, cancellations, customer order lookup
 
 RULES:
 - If the question is unrelated to these topics, politely decline.
-- If a new customer wants to register or place an order without an account, use register_customer to create their profile (ask for their full name, email, and optionally their phone number for delivery notifications).
-- If a customer wants to place an order, use create_new_order.
 - If a customer provides their name, use lookup_customer_orders to find their orders.
 - If they provide an order ID (like ORD001), use the appropriate tool.
-- Emails are allowed for registration, but for order lookups, suggest they search by name if the lookup fails.
-- You can call MULTIPLE tools in one turn if needed (e.g., register a user AND place an order).
 - When showing customer orders, format them clearly with order ID, item, status, and delivery date.
 - Keep responses concise and helpful.
+- When a customer asks about their refund status, ALWAYS explicitly include the last updated date (e.g. "last updated on ...") and the refund reason (e.g., "reason: ...") from the tool's response in your reply.
 - NEVER make up order data or customer info — always use tools to look up real information.
 - STRICTLY FORBIDDEN: Do not promise or offer discounts, coupons, or free items under any circumstances.
 - STRICTLY FORBIDDEN: Do not make up fake company policies, warranties, or shipping guarantees.
 - STRICTLY FORBIDDEN: Do not hallucinate or suggest products that are not found in the tools or knowledge base.
-- USE 'create_support_ticket' for ANY complaint, stolen item, or complex request you cannot solve yourself.
+- USE 'create_support_ticket' for ANY complaint, stolen item, or complex request you cannot solve yourself. ALWAYS pass the customer_name as stated by the user in the conversation.
 - NEVER use 'create_new_order' for a support issue or complaint.
-- If a user asks about something completely outside of e-commerce, state clearly that you cannot assist. """
+- If a user asks about something completely outside of e-commerce, state clearly that you cannot assist.
+- TICKET ID RULE: Whenever a Ticket ID in the format TKT-XXXXX is present — either from a tool response OR mentioned earlier in this conversation — you MUST always include that exact Ticket ID verbatim in your reply. Never paraphrase, summarise, or omit it. Example: "Your Ticket ID is TKT-F03FFF."
+
+VOICE INPUT ORDER ID RULE (CRITICAL):
+- Users often speak their order ID via voice and speech recognition may mishear "ORD" as "ODD", "odd", "or d", "OR D", etc.
+- If you receive an order ID that looks like "ODD001", "odd 002", "ODD 002" — treat it as ORD001, ORD002 etc. and pass it directly to the tool.
+- The normalize_order_id function in the tool already handles this correction — just pass whatever the user gave you.
+- NEVER tell the user their order ID format is wrong if it contains recognizable digits. Instead, try the tool first.
+- Only ask for clarification if there are NO digits at all in the order ID.
+
+NEW CUSTOMER / ORDER FLOW — FOLLOW THIS EXACTLY:
+1. If a new customer provides their name, email, AND product all in ONE message:
+   - Call register_customer AND create_new_order immediately in the same turn.
+   - Reply with a confirmation including the order ID, item, and their email address.
+   - Example: "You've been registered! Your order ORD1234 for LG TV has been placed and will be delivered within 5 business days. We'll send updates to user@email.com."
+
+2. If a new customer wants to buy something but did NOT provide an email in their message:
+   - DO NOT call any tool yet.
+   - Reply asking for their email address. Example:
+   "To place your order, I'll need your email address. Could you please share it so we can create your account and confirm your order?"
+
+3. Once the customer provides a valid email in a follow-up message:
+   - Call register_customer (with their name and the email) and create_new_order (with their name and item).
+   - Reply with the full confirmation including their real email address.
+
+4. NEVER register or place an order without a valid email address from the customer.
+   If you cannot find an email in their message, ask again politely."""
 
 # Map tool names to intent labels for badge display
 TOOL_INTENT_MAP = {
@@ -163,6 +186,7 @@ def escalation_check(state: AgentState) -> AgentState:
 
 def escalate(state: AgentState) -> AgentState:
     """Escalate to a human agent by creating a support ticket."""
+    import re as _re
     messages = state.get("messages", [])
     already_escalated = any("TKT-" in m.content for m in messages if isinstance(m, AIMessage))
 
@@ -172,13 +196,58 @@ def escalate(state: AgentState) -> AgentState:
         ticket_id = f"TKT-{uuid.uuid4().hex[:6].upper()}"
         order_id = state.get("order_id")
         
+        # Scan conversation history in REVERSE order for most recent order ID and customer name if not in state
+        customer_name = None
+        for m in reversed(messages):
+            # Check AIMessage for tool calls containing order_id or customer_name
+            if isinstance(m, AIMessage) and m.tool_calls:
+                for tc in m.tool_calls:
+                    tc_args = tc.get("args", {})
+                    if not order_id and "order_id" in tc_args:
+                        order_id = str(tc_args["order_id"]).upper()
+                    if not customer_name and "customer_name" in tc_args:
+                        customer_name = tc_args["customer_name"]
+            
+            if isinstance(m, HumanMessage):
+                # Extract order IDs like ORD001, ORD 001, ORD1234
+                if not order_id:
+                    order_match = _re.search(r'\b(ORD\s*\d{3,10})\b', m.content, _re.IGNORECASE)
+                    if order_match:
+                        order_id = _re.sub(r'\s+', '', order_match.group(1)).upper()
+                # Extract customer name from "I am X" or "my name is X" patterns
+                if not customer_name:
+                    name_match = _re.search(r'(?:I am|my name is|I\'m|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', m.content, _re.IGNORECASE)
+                    if name_match:
+                        customer_name = name_match.group(1).strip()
+            elif isinstance(m, ToolMessage):
+                # Extract customer info from tool responses
+                if not order_id:
+                    order_match = _re.search(r'\b(ORD\s*\d{3,10})\b', m.content, _re.IGNORECASE)
+                    if order_match:
+                        order_id = _re.sub(r'\s+', '', order_match.group(1)).upper()
+        
         # Summarize the conversation to provide context for the human agent
         history_lines = [f"{'User' if isinstance(m, HumanMessage) else 'Agent'}: {m.content}" 
                          for m in messages[-4:] if isinstance(m, (HumanMessage, AIMessage))]
         history = "\n".join(history_lines)
         
-        result = create_support_ticket(ticket_id, order_id, "Automated Escalation", history)
-        reply = f"I've escalated your case to a human agent. {result['message']} Ticket ID: {ticket_id}"
+        result = create_support_ticket(ticket_id, order_id, "Automated Escalation", history, customer_name)
+        # Use the actual ticket ID from result (handles duplicate case where existing ticket was found)
+        actual_ticket_id = result.get("ticket_id", ticket_id)
+        if result.get("duplicate"):
+            reply = (
+                f"Your case already has an open support ticket. "
+                f"Ticket ID: {actual_ticket_id}. "
+                f"A human agent will review it and contact you within 2 hours."
+            )
+        elif result.get("success"):
+            reply = (
+                f"I've escalated your case to a human agent. "
+                f"Ticket ID: {actual_ticket_id}. "
+                f"A human agent will contact you within 2 hours."
+            )
+        else:
+            reply = f"I've flagged your case for immediate review. {result.get('message', 'A human agent will be in touch shortly.')} Reference: {ticket_id}"
 
     state["messages"].append(AIMessage(content=reply))
     return state

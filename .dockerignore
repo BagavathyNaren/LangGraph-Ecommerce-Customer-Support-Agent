@@ -32,7 +32,7 @@ htmlcov/
 Thumbs.db
 
 # Project specific
-cache/
+# cache/ (Removed so it is included in deployment)
 evaluation/results/
 README.md
 *.sqlite

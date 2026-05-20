@@ -34,7 +34,7 @@ def get_refund_status(order_id: str) -> dict:
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT r.refund_id, r.status, r.amount, r.eta
+                    SELECT r.refund_id, r.status, r.amount, r.eta, r.refund_reason, r.updated_at
                     FROM refunds r
                     JOIN orders o ON r.order_id = o.order_id
                     WHERE r.order_id = %s
@@ -46,7 +46,9 @@ def get_refund_status(order_id: str) -> dict:
                     "refund_id": row[0],
                     "refund_status": row[1],
                     "amount": float(row[2]),
-                    "eta": row[3]
+                    "eta": row[3],
+                    "refund_reason": row[4] or "Not specified",
+                    "last_updated": str(row[5]) if row[5] else "N/A"
                 }
     except Exception as e:
         logger.error("DB error in get_refund_status", extra={"event": "db_error", "error": str(e), "order_id": order_id})
@@ -79,9 +81,9 @@ def initiate_return(order_id: str, reason: str) -> dict:
                 eta = "3-5 business days"
                 
                 cur.execute("""
-                    INSERT INTO refunds (refund_id, order_id, amount, status, eta)
-                    VALUES (%s, %s, %s, 'pending', %s)
-                """, (refund_id, order_id, amount, eta))
+                    INSERT INTO refunds (refund_id, order_id, amount, status, eta, refund_reason)
+                    VALUES (%s, %s, %s, 'pending', %s, %s)
+                """, (refund_id, order_id, amount, eta, reason))
                 
                 # Notification
                 cur.execute("""
@@ -215,6 +217,18 @@ def register_new_customer(name: str, email: str, phone_number: str = None) -> di
                 """, (customer_id, name, email, phone_number))
                 conn.commit()
                 
+                # Send email notification after successful registration
+                if email:
+                    try:
+                        from tools.notifications import send_email
+                        send_email(
+                            to_email=email,
+                            subject="Welcome to Our Store!",
+                            body=f"Hi {name},\n\nWelcome! Your customer account has been created successfully.\nYour Customer ID is {customer_id}.\n\nThank you for choosing us!"
+                        )
+                    except Exception as email_err:
+                        logger.error(f"Failed to send welcome email to {email}: {email_err}")
+                
                 contact = f"email '{email}'"
                 if phone_number:
                     contact += f" and phone '{phone_number}'"
@@ -229,27 +243,49 @@ def register_new_customer(name: str, email: str, phone_number: str = None) -> di
         logger.error("DB error in register_new_customer", extra={"event": "db_error", "error": str(e), "email": email})
         return {"error": USER_FRIENDLY_DB_ERROR}
 
-def place_new_order(customer_name: str, item: str) -> dict:
+def place_new_order(customer_name: str, item: str, customer_email: str = None) -> dict:
     """Place a new order for a customer."""
     import random
     from datetime import datetime, timedelta
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Find customer
-                cur.execute("SELECT customer_id FROM customers WHERE name ILIKE %s OR email ILIKE %s", (f"%{customer_name}%", f"%{customer_name}%"))
-                row = cur.fetchone()
+                row = None
+                # 1. Exact Email Match (most robust, exact, immune to name duplicates)
+                if customer_email:
+                    cur.execute(
+                        "SELECT customer_id, name, email, telegram_chat_id FROM customers WHERE LOWER(email) = LOWER(%s) LIMIT 1",
+                        (customer_email,)
+                    )
+                    row = cur.fetchone()
+                
+                # 2. Exact Name Match (fallback)
+                if not row:
+                    cur.execute(
+                        "SELECT customer_id, name, email, telegram_chat_id FROM customers WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+                        (customer_name,)
+                    )
+                    row = cur.fetchone()
+                
+                # 3. Partial Match (last resort fallback)
+                if not row:
+                    cur.execute(
+                        "SELECT customer_id, name, email, telegram_chat_id FROM customers WHERE name ILIKE %s OR email ILIKE %s LIMIT 1",
+                        (f"%{customer_name}%", f"%{customer_name}%")
+                    )
+                    row = cur.fetchone()
+                    
                 if not row:
                     return {"success": False, "message": f"Customer '{customer_name}' not found. Please register an account first."}
                 
-                customer_id = row[0]
+                customer_id, real_name, email, telegram_chat_id = row
                 # Ensure unique order ID
                 while True:
                     order_id = f"ORD{random.randint(100, 9999)}"
                     cur.execute("SELECT order_id FROM orders WHERE order_id = %s", (order_id,))
                     if not cur.fetchone():
                         break
-
+ 
                 tracking = f"TRK-{order_id}-{datetime.now().year}"
                 delivery_date = (datetime.now() + timedelta(days=5)).date()
                 
@@ -258,6 +294,23 @@ def place_new_order(customer_name: str, item: str) -> dict:
                     VALUES (%s, %s, %s, 'processing', %s, %s)
                 """, (order_id, customer_id, item, delivery_date, tracking))
                 conn.commit()
+                
+                # Send email and Telegram notification after placing order successfully
+                try:
+                    from tools.notifications import send_email, send_telegram
+                    if email:
+                        send_email(
+                            to_email=email,
+                            subject=f"Order Confirmed: {order_id}",
+                            body=f"Hi {real_name},\n\nThank you for your purchase! Your order {order_id} for '{item}' has been placed successfully.\nExpected delivery date: {delivery_date}.\nTracking number: {tracking}."
+                        )
+                    if telegram_chat_id:
+                        send_telegram(
+                            chat_id=telegram_chat_id,
+                            message=f"🛍️ Order Placed successfully!\nOrder ID: {order_id}\nItem: {item}\nExpected delivery: {delivery_date}"
+                        )
+                except Exception as notify_err:
+                    logger.error(f"Failed to send order notifications for {order_id}: {notify_err}")
                 
                 return {
                     "success": True,
@@ -271,13 +324,15 @@ def place_new_order(customer_name: str, item: str) -> dict:
 def search_knowledge_base(query: str) -> dict:
     return {"answer": f"Based on our policy regarding '{query}': please allow 5-7 business days for processing. Contact support for urgent cases."}
 
-def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, message: str) -> dict:
+def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, message: str, customer_name: str = None) -> dict:
     # Keywords that indicate a physical delivery issue (requires delivered status)
     DELIVERY_REQUIRED_KEYWORDS = {"stolen", "damaged", "wrong_item", "missing", "not_received"}
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
                 customer_id = None
+                
+                # 1. Try to find customer via order_id
                 if order_id:
                     cur.execute("SELECT customer_id, status FROM orders WHERE order_id = %s", (order_id,))
                     row = cur.fetchone()
@@ -294,7 +349,77 @@ def create_support_ticket(ticket_id: str, order_id: str, issue_type: str, messag
                                            f"Please wait for delivery before reporting a {issue_type.replace('_', ' ')} issue. "
                                            f"If your order is significantly delayed, we can help with that instead."
                             }
+
+                        # Bug 1 Fix: Validate caller's name matches the order owner
+                        if customer_name:
+                            cur.execute(
+                                "SELECT name FROM customers WHERE customer_id = %s", (customer_id,)
+                            )
+                            owner_row = cur.fetchone()
+                            if owner_row and owner_row[0]:
+                                owner_words = set(owner_row[0].lower().split())
+                                caller_words = set(customer_name.lower().split())
+                                if not caller_words.intersection(owner_words):
+                                    logger.warning(
+                                        "Identity mismatch on ticket creation",
+                                        extra={"event": "identity_mismatch",
+                                               "caller": customer_name,
+                                               "owner": owner_row[0],
+                                               "order_id": order_id}
+                                    )
+                                    return {
+                                        "success": False,
+                                        "identity_mismatch": True,
+                                        "message": (
+                                            f"I could not verify your identity for order {order_id}. "
+                                            f"The name you provided does not match our records. "
+                                            f"Please contact us using the email address registered with this order."
+                                        )
+                                    }
                 
+                # 2. If no customer_id found via order, try by name
+                if not customer_id and customer_name:
+                    cur.execute(
+                        "SELECT customer_id FROM customers WHERE name ILIKE %s LIMIT 1",
+                        (f"%{customer_name}%",)
+                    )
+                    name_row = cur.fetchone()
+                    if name_row:
+                        customer_id = name_row[0]
+                
+                # 3. Bug 3 Fix: Duplicate check — ONE open ticket per order per customer (any issue type)
+                if order_id:
+                    if customer_id:
+                        cur.execute("""
+                            SELECT ticket_id, issue_type FROM support_tickets
+                            WHERE order_id = %s
+                              AND customer_id = %s
+                              AND status = 'open'
+                            LIMIT 1
+                        """, (order_id, customer_id))
+                    else:
+                        cur.execute("""
+                            SELECT ticket_id, issue_type FROM support_tickets
+                            WHERE order_id = %s
+                              AND customer_id IS NULL
+                              AND status = 'open'
+                            LIMIT 1
+                        """, (order_id,))
+                    existing = cur.fetchone()
+                    if existing:
+                        logger.info(
+                            "Duplicate ticket suppressed",
+                            extra={"event": "duplicate_ticket", "existing_ticket": existing[0],
+                                   "order_id": order_id, "existing_issue": existing[1]}
+                        )
+                        return {
+                            "success": True,
+                            "message": f"An open support ticket already exists for order {order_id} (Ticket ID: {existing[0]}). "
+                                       "A human agent will review your case and contact you within 2 hours.",
+                            "ticket_id": existing[0],
+                            "duplicate": True
+                        }
+
                 cur.execute("""
                     INSERT INTO support_tickets (ticket_id, customer_id, order_id, issue_type, message)
                     VALUES (%s, %s, %s, %s, %s)

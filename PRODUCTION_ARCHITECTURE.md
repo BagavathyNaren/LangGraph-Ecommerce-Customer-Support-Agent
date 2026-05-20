@@ -1,7 +1,7 @@
 # 🚀 Production System Architecture & Sign-Off
 
-**Date:** May 15, 2026  
-**Version:** 1.0.0  
+**Date:** May 20, 2026  
+**Version:** 1.0.2  
 **Status:** ✅ **PRODUCTION READY**
 
 ---
@@ -34,7 +34,7 @@ graph TD
     end
     
     %% Data & Persistence Layer
-    Agent_Brain --> DB[(🐘 Neon Postgres)]
+    Agent_Brain --> DB[(🐘 GCP PostgreSQL e2-micro)]
     subgraph Persistence_Monitoring [Data Stack]
         DB --> CHK[💾 PostgresSaver Checkpointer]
         DB --> BUS[📦 Business Data: Orders/Tickets]
@@ -64,13 +64,14 @@ graph TD
 ### 3. **LangGraph State Machine (The "Brain")**
 *   **ReAct Pattern:** The agent follows a **Reasoning + Acting** loop. It thinks, decides which tool to call, processes the result, and repeats until the task is done.
 *   **State Management:** The `AgentState` object tracks conversation history, detected intents, order IDs, and escalation triggers (like user anger levels) across the entire session.
-*   **Checkpointer:** Uses `PostgresSaver` to save every single step of the graph to Neon Postgres. If the server crashes, the agent resumes exactly where it left off.
+*   **Checkpointer:** Uses `PostgresSaver` to save every single step of the graph to GCP PostgreSQL (e2-micro VM). If the server crashes, the agent resumes exactly where it left off.
 
 ### 4. **Persistence & Data Stack**
-*   **Neon Postgres:** A serverless Postgres database hosting:
+*   **GCP PostgreSQL (e2-micro):** A self-hosted PostgreSQL instance on a GCP e2-micro VM hosting:
     *   **Business Tables:** Orders, Customers, Refunds, and Support Tickets.
     *   **Checkpoints:** The binary state of every active conversation thread.
     *   **Logs:** A full audit trail of every interaction for human review.
+*   **Duplicate Ticket Guard:** Before inserting a new ticket, the system checks for an existing open ticket with the same `order_id` + `issue_type` + `customer_id` and returns the existing ticket ID, preventing data duplication.
 *   **Sliding Window Pruning:** To maintain performance, the system automatically "prunes" conversation history longer than 15 messages, ensuring the LLM context remains sharp and cost-efficient.
 
 ### 5. **Observability & Tracing**
@@ -104,7 +105,7 @@ graph TD
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | ✅ | Neon Postgres connection string |
+| `DATABASE_URL` | ✅ | GCP e2-micro PostgreSQL connection string (`postgresql://user:pass@<IP>:5432/dbname`) |
 | `OPENAI_API_KEY` | ✅ | GPT-4o-mini API access |
 | `REDIS_URL` | ✅ | Upstash Redis for caching |
 | `LANGCHAIN_API_KEY` | ✅ | LangSmith Authentication |

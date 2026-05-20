@@ -9,9 +9,9 @@ _pool = None
 def get_db_config():
     """
     Returns the connection string or parameters based on the environment.
-    Supports both standard URL (Neon/HF) and Cloud SQL Unix Sockets (GCP).
+    Supports both standard DATABASE_URL (GCP e2-micro Postgres / local) and Cloud SQL Unix Sockets (GCP Cloud SQL).
     """
-    # 1. Check for standard DATABASE_URL (Hugging Face / Local)
+    # 1. Check for standard DATABASE_URL (GCP e2-micro Postgres / Local)
     db_url = os.environ.get("DATABASE_URL")
     
     # 2. Check for GCP Cloud SQL specific variables
@@ -33,7 +33,7 @@ def get_db_config():
         return f"host={socket_path} user={db_user} password={db_pass} dbname={db_name}"
     
     if db_url:
-        logger.info("Connecting to DB via DATABASE_URL (Standard/Neon)", 
+        logger.info("Connecting to DB via DATABASE_URL (GCP Postgres)", 
                     extra={"event": "db_config", "mode": "url"})
         return db_url
     
@@ -45,13 +45,13 @@ def get_pool() -> ConnectionPool:
         conn_info = get_db_config()
         _pool = ConnectionPool(
             conn_info,
-            min_size=1,
-            max_size=5,
+            min_size=1,             # Keep 1 warm connection on the persistent min-instance (eliminates cold-start DB latency)
+            max_size=3,             # 3 connections per instance: 1 for checkpointer, 1 for tools, 1 buffer
             open=True,
-            max_idle=60,
-            reconnect_timeout=30,
+            max_idle=30,            # Keep idle connections alive for 30s on the warm instance
+            reconnect_timeout=10,   # Fail fast on connection loss
             check=ConnectionPool.check_connection,  # validates connection is alive before returning
-            kwargs={"autocommit": True, "connect_timeout": 10}
+            kwargs={"autocommit": True, "connect_timeout": 5}  # Short timeout for faster failures
         )
     return _pool
 

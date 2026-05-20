@@ -1,0 +1,14 @@
+.gcloudignore
+.git
+.gitignore
+.dockerignore
+node_modules
+__pycache__
+*.py[cod]
+.env
+venv
+env
+env.yaml
+.vscode
+.idea
+evaluation/results/

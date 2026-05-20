@@ -8,7 +8,16 @@ logger = get_logger("guardrails")
 analyzer = AnalyzerEngine()
 anonymizer = AnonymizerEngine()
 
-PII_ENTITIES = ["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"]
+# PII entities to scrub from USER INPUT
+# EMAIL_ADDRESS is intentionally excluded: the e-commerce agent needs to see
+# emails in chat to recognize that the customer has provided one, and to echo
+# it back in order confirmations. Scrubbing it caused two bugs:
+#   1. LLM saw "<EMAIL_ADDRESS>" and asked the user to provide their email again
+#   2. Agent response showed "<EMAIL_ADDRESS>" instead of the real address
+INPUT_SCRUB_ENTITIES = ["PHONE_NUMBER", "CREDIT_CARD"]
+
+# PII entities to scrub from AGENT OUTPUT (same list — emails must flow through)
+OUTPUT_SCRUB_ENTITIES = ["PHONE_NUMBER", "CREDIT_CARD"]
 
 # Deterministic jailbreak/threat patterns — fast, reliable, not bypassable via prompt injection
 JAILBREAK_PATTERNS = [
@@ -47,7 +56,7 @@ JAILBREAK_PATTERNS = [
 def validate_input(message: str) -> tuple[str, bool]:
     """Validate and sanitize user input. Returns (cleaned_message, pii_detected)."""
     # 1. PII detection and redaction (Presidio — fast, runs locally)
-    results = analyzer.analyze(text=message, entities=PII_ENTITIES, language="en")
+    results = analyzer.analyze(text=message, entities=INPUT_SCRUB_ENTITIES, language="en")
     pii_detected = len(results) > 0
     if pii_detected:
         anonymized = anonymizer.anonymize(text=message, analyzer_results=results)
@@ -65,9 +74,14 @@ def validate_input(message: str) -> tuple[str, bool]:
     return message, pii_detected
 
 def validate_output(response: str) -> str:
-    """Strip any PII that the LLM might have leaked in its response."""
-    results = analyzer.analyze(text=response, entities=PII_ENTITIES, language="en")
+    """Strip sensitive PII that the LLM might have leaked in its response.
+
+    EMAIL_ADDRESS is intentionally NOT scrubbed — the agent legitimately
+    echoes the customer's email in order confirmations.
+    Only phone numbers and credit cards are scrubbed from agent output.
+    """
+    results = analyzer.analyze(text=response, entities=OUTPUT_SCRUB_ENTITIES, language="en")
     if results:
         anonymized = anonymizer.anonymize(text=response, analyzer_results=results)
         return anonymized.text
-    return response
+    return response

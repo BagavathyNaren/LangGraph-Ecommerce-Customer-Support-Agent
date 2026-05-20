@@ -59,7 +59,15 @@ async def lifespan(app: FastAPI):
                     CREATE INDEX IF NOT EXISTS idx_customers_phone 
                     ON customers(phone_number);
                 """)
-        logger.info("DB migration: phone_number column verified", extra={"event": "db_migration"})
+                # DB-level duplicate ticket guard: ONE open ticket per (order_id, customer_id)
+                # Drop old narrow index (by issue_type) if it exists, then create the broad one
+                cur.execute("DROP INDEX IF EXISTS uq_open_ticket_per_order_issue")
+                cur.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_one_open_ticket_per_order
+                    ON support_tickets (order_id, customer_id)
+                    WHERE status = 'open' AND customer_id IS NOT NULL;
+                """)
+        logger.info("DB migration: schema verified (phone_number + unique ticket index)", extra={"event": "db_migration"})
     except Exception as e:
         logger.warning(f"DB migration warning: {e}", extra={"event": "db_migration_warning"})
     graph = build_graph()
@@ -72,16 +80,22 @@ app = FastAPI(lifespan=lifespan)
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","),
+    allow_origins=[
+        "https://my-agentic-lab.web.app",
+        "https://my-agentic-lab.firebaseapp.com",
+        "http://localhost:5173",
+        "*"
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=500)
     thread_id: str = Field(default="default", min_length=1, max_length=100)
+    email: str = Field(default=None)  # Explicit email from frontend for customer registration
 
     @field_validator("message")
     @classmethod
@@ -98,9 +112,17 @@ class ChatRequest(BaseModel):
             raise ValueError("thread_id must be alphanumeric.")
         return v
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if v is not None:
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", v):
+                raise ValueError("Invalid email address format.")
+        return v
+
 @app.get("/")
 def root():
-    return FileResponse("static/index.html")
+    return FileResponse("frontend/dist/index.html")
 
 @app.get("/health")
 def health():
@@ -161,9 +183,11 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
             
         validated_message, pii_detected = validate_input(request.message)
 
-        # Securely extract raw email before redaction to act as a vault for tools
-        email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", request.message)
-        raw_email = email_match.group(0) if email_match else None
+        # Use explicit frontend email first; fall back to scanning message text
+        raw_email = request.email or None
+        if not raw_email:
+            email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", request.message)
+            raw_email = email_match.group(0) if email_match else None
 
         if pii_detected:
             logger.warning("PII detected and redacted in input", extra={
@@ -249,6 +273,11 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         })
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        # DEBUG: Print the actual error to logs
+        print(f"CHAT ERROR DEBUG: {e}")
+        import traceback
+        traceback.print_exc()
+
         logger.error("Internal agent error", extra={
             "event": "agent_error",
             "request_id": request_id,
@@ -290,8 +319,11 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             "pii_detected": pii_detected
         })
         try:
-            email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
-            raw_email = email_match.group(0) if email_match else None
+            # Use explicit frontend email first; fall back to scanning message text
+            raw_email = request.email or None
+            if not raw_email:
+                email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
+                raw_email = email_match.group(0) if email_match else None
             
             # CACHE BYPASS: Never serve analytics from cache — data must be real-time
             is_analytics_query = any(word in validated_message.lower() for word in ["analytics", "stats", "summary", "dashboard"])
@@ -383,6 +415,11 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             yield f"data: {json.dumps({'done': True, 'intent': result.get('intent'), 'escalated': result.get('escalated', False), 'order_id': result.get('order_id'), 'cache_hit': False})}\n\n"
 
         except Exception as e:
+            # DEBUG: Print the actual error to logs so we can fix it
+            print(f"STREAM ERROR DEBUG: {e}")
+            import traceback
+            traceback.print_exc()
+            
             logger.error("Stream error", extra={
                 "event": "stream_error",
                 "request_id": request_id,
