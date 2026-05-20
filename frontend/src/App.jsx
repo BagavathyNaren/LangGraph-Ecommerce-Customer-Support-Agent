@@ -47,11 +47,13 @@ function App() {
   const silenceTimerRef = useRef(null)
   const currentAudioRef = useRef(null)   // Tracks the currently playing Audio element
   const jarvisModeRef = useRef(false)
+  const jarvisStateRef = useRef('idle')
   const sendMessageRef = useRef(null)
   const isLoadingRef = useRef(false)
 
   // Keep refs in sync with state (avoids stale closures in event handlers)
   useEffect(() => { jarvisModeRef.current = jarvisMode }, [jarvisMode])
+  useEffect(() => { jarvisStateRef.current = jarvisState }, [jarvisState])
   useEffect(() => { isLoadingRef.current = isLoading }, [isLoading])
   
   // Keep sendMessageRef updated on every render
@@ -141,15 +143,36 @@ function App() {
 
       recognitionRef.current.onerror = (err) => {
         console.error('Speech recognition error:', err)
+        if (err.error === 'no-speech') {
+          // 'no-speech' is a standard timeout error when no voice is detected.
+          // In JARVIS mode, we can ignore this because onend will handle the restart.
+          return
+        }
         setIsListening(false)
-        if (jarvisModeRef.current) setJarvisState('idle')
+        if (jarvisModeRef.current && 
+            jarvisStateRef.current !== 'speaking' && 
+            jarvisStateRef.current !== 'processing') {
+          setJarvisState('idle')
+        }
       }
       
       recognitionRef.current.onend = () => {
-        // Reset listening state and JARVIS state only if we aren't waiting for response / loading
-        if (!silenceTimerRef.current && !isLoadingRef.current) {
+        // In JARVIS mode, if the SpeechRecognition engine naturally stops/times out 
+        // while we are supposed to be actively listening, restart it immediately.
+        if (jarvisModeRef.current && jarvisStateRef.current === 'listening') {
+          try {
+            recognitionRef.current.start()
+          } catch (e) {
+            // Already running or failed to start
+          }
+        } else {
           setIsListening(false)
-          if (jarvisModeRef.current) setJarvisState('idle')
+          // Only reset to idle if not speaking or processing
+          if (jarvisModeRef.current && 
+              jarvisStateRef.current !== 'speaking' && 
+              jarvisStateRef.current !== 'processing') {
+            setJarvisState('idle')
+          }
         }
       }
     }
@@ -173,24 +196,57 @@ function App() {
     scrollToBottom()
   }, [messages])
 
-  // ═══ Text-to-Speech — StreamElements Cloud TTS (Brian, British Male) ═══
-  // Why: Browser Web Speech API is fundamentally broken for volume/quality.
-  // StreamElements returns a real MP3 (Brian voice) played via HTML5 Audio API.
-  // This guarantees: loud volume, clear audio, no Chrome bugs, consistent voice.
+  // ═══ Stop Microphone immediately and clear silence timers ═══
+  const stopMic = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort() } catch (e) { /* ignore */ }
+    }
+    setIsListening(false)
+  }
+
+  // ═══ Text-to-Speech — OpenAI TTS via Web Audio API with GainNode Amplification ═══
+  // Why Web Audio API instead of HTML5 Audio:
+  //   1. HTML5 Audio.volume maxes at 1.0 — can't amplify beyond system volume
+  //   2. Web Audio API GainNode can push audio to 2x-3x system volume
+  //   3. Bypasses OS-level audio ducking that Chrome applies when mic is hot
+  //   4. Gives us full control over the audio pipeline
+
+  // Persistent AudioContext (reused across all speak calls)
+  const audioCtxRef = useRef(null)
+  const gainNodeRef = useRef(null)
+  const currentSourceRef = useRef(null)
+
+  const getAudioContext = () => {
+    if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+      gainNodeRef.current = audioCtxRef.current.createGain()
+      gainNodeRef.current.gain.value = 3.0  // 3x amplification
+      gainNodeRef.current.connect(audioCtxRef.current.destination)
+    }
+    return audioCtxRef.current
+  }
 
   // Stop any currently playing audio immediately
   const stopAudio = () => {
     const cur = currentAudioRef.current
     if (cur) {
-      if (cur._abort) cur._abort()       // Cancel in-flight TTS fetch
-      else { cur.pause(); cur.src = '' } // Stop a playing Audio element
+      if (cur._abort) cur._abort()  // Cancel in-flight TTS fetch
       currentAudioRef.current = null
+    }
+    if (currentSourceRef.current) {
+      try { currentSourceRef.current.stop() } catch (e) { /* already stopped */ }
+      currentSourceRef.current = null
     }
   }
 
   const speak = async (text) => {
     if (!voiceEnabled && !jarvisModeRef.current) return
     stopAudio()
+    stopMic()  // Kill the mic FIRST to prevent OS audio ducking
 
     const cleanedText = cleanTextForSpeech(text).trim()
     if (!cleanedText) return
@@ -199,56 +255,52 @@ function App() {
     const isJarvis = jarvisModeRef.current
     if (isJarvis) setJarvisState('speaking')
 
-    // AbortController so stopAudio() can cancel any in-flight fetch
+    // Wait 300ms for the OS to fully release the mic device
+    await new Promise(r => setTimeout(r, 300))
+
     const abortCtrl = new AbortController()
 
-    let blobUrl = null
     try {
       // Store abort function so stopAudio() can cancel in-flight fetches
       currentAudioRef.current = { _abort: () => abortCtrl.abort() }
 
-      // Fetch MP3 from our own backend proxy in one single continuous stream
       const resp = await fetch(
         `${BASE_URL}/tts?text=${encodeURIComponent(cleanedText)}`,
         { signal: abortCtrl.signal }
       )
       if (!resp.ok) throw new Error(`TTS fetch failed: ${resp.status}`)
-      const blob = await resp.blob()
-      blobUrl = URL.createObjectURL(blob)
+      const arrayBuffer = await resp.arrayBuffer()
 
-      const audio = new Audio(blobUrl)
-      audio.volume = 1.0
-      currentAudioRef.current = audio
+      // Decode MP3 into raw audio samples via Web Audio API
+      const ctx = getAudioContext()
+      if (ctx.state === 'suspended') await ctx.resume()
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+
+      // Create a source node → GainNode (3x amplification) → speakers
+      const source = ctx.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(gainNodeRef.current)
+      currentSourceRef.current = source
+      currentAudioRef.current = null  // No longer in fetch phase
 
       await new Promise((resolve) => {
-        audio.onended = resolve
-        audio.onerror = (e) => {
-          console.warn('Audio playback error', e)
-          resolve()
-        }
-        audio.play().catch((e) => {
-          console.warn('Audio.play() rejected:', e)
-          resolve()
-        })
+        source.onended = resolve
+        source.start(0)
       })
 
-      // When done, restart JARVIS mic if still in JARVIS mode
+      // Audio finished — restart JARVIS mic if still in JARVIS mode
+      currentSourceRef.current = null
       if (isJarvis && jarvisModeRef.current) {
         setJarvisState('idle')
-        setTimeout(() => { if (jarvisModeRef.current) startListening() }, 700)
+        setTimeout(() => { if (jarvisModeRef.current) startListening() }, 400)
       }
     } catch (e) {
-      if (e.name === 'AbortError') return  // stopAudio() was called, bail out
-      console.error('TTS fetch error:', e)
-      // On error, revert to idle so it doesn't get stuck
+      if (e.name === 'AbortError') return
+      console.error('TTS playback error:', e)
+      currentSourceRef.current = null
       if (isJarvis && jarvisModeRef.current) {
         setJarvisState('idle')
-        setTimeout(() => { if (jarvisModeRef.current) startListening() }, 700)
-      }
-    } finally {
-      if (blobUrl) URL.revokeObjectURL(blobUrl)
-      if (currentAudioRef.current && currentAudioRef.current.src === blobUrl) {
-         currentAudioRef.current = null
+        setTimeout(() => { if (jarvisModeRef.current) startListening() }, 400)
       }
     }
   }
@@ -267,12 +319,7 @@ function App() {
   }
 
   const stopListening = () => {
-    recognitionRef.current?.stop()
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = null
-    }
-    setIsListening(false)
+    stopMic()
     if (jarvisModeRef.current) setJarvisState('idle')
     stopAudio()
   }
@@ -325,6 +372,7 @@ function App() {
     const text = normalizeOrderIdInText(textVal.trim())
     if (!text || isLoading) return
 
+    stopMic()
     setUserInput('')
     setIsLoading(true)
     if (jarvisModeRef.current) setJarvisState('processing')

@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from cache.redis_cache import get_cached_response, set_cached_response
 from fastapi import FastAPI, HTTPException, Header, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from pydantic import BaseModel, field_validator, Field
 from langchain_core.messages import HumanMessage, AIMessage
 from graph.graph_builder import build_graph
@@ -17,6 +17,7 @@ import asyncio
 import json
 import psycopg
 from tools.analytics import init_analytics_db, log_event
+from openai import OpenAI
 
 os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
@@ -70,8 +71,21 @@ async def lifespan(app: FastAPI):
         logger.info("DB migration: schema verified (phone_number + unique ticket index)", extra={"event": "db_migration"})
     except Exception as e:
         logger.warning(f"DB migration warning: {e}", extra={"event": "db_migration_warning"})
-    graph = build_graph()
-    logger.info("Graph built successfully", extra={"event": "graph_ready"})
+    # Build the graph asynchronously so the ASGI server can start
+    # quickly and bind to the port; heavy initialisation can run in
+    # the background and will set `graph` when ready.
+    loop = asyncio.get_event_loop()
+    async def _build_graph_bg():
+        global graph
+        try:
+            g = await loop.run_in_executor(None, build_graph)
+            graph = g
+            logger.info("Graph built successfully", extra={"event": "graph_ready"})
+        except Exception as e:
+            logger.error(f"Graph build failed: {e}", extra={"event": "graph_failed"})
+
+    # schedule background graph build
+    asyncio.create_task(_build_graph_bg())
     yield
     logger.info("Shutting down", extra={"event": "shutdown"})
 
@@ -120,11 +134,15 @@ class ChatRequest(BaseModel):
                 raise ValueError("Invalid email address format.")
         return v
 
+# Update TTS model and timeout
+TTS_MODEL = "tts-1"
+HTTP_TIMEOUT = 60  # seconds
+
 @app.get("/tts")
 async def tts_proxy(text: str):
     """
     Proxy TTS audio through the backend using OpenAI's TTS API.
-    Uses the 'echo' voice (clear, warm male) and tts-1-hd for loud and clear output.
+    Uses the 'echo' voice (clear, warm male) and tts-1 for low-latency, loud and clear output.
     """
     import requests as req
     from fastapi.responses import Response as FastResponse
@@ -139,12 +157,12 @@ async def tts_proxy(text: str):
             "Content-Type": "application/json"
         }
         data = {
-            "model": "tts-1-hd",
+            "model": TTS_MODEL,
             "input": text,
             "voice": "echo",
             "response_format": "mp3"
         }
-        r = req.post(url, headers=headers, json=data, timeout=20)
+        r = req.post(url, headers=headers, json=data, timeout=HTTP_TIMEOUT)
         r.raise_for_status()
         return FastResponse(
             content=r.content,
