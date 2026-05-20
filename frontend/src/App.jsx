@@ -95,50 +95,33 @@ function App() {
       const voices = window.speechSynthesis.getVoices()
       if (voices.length === 0) return
 
-      // Prioritize local voices (localService === true) to avoid online network lag/silence
-      // 1. Try en-GB local voices first (e.g., Daniel, Hazel, George, Susan, etc.)
-      let best = voices.find(v => v.lang.toLowerCase().includes('en-gb') && v.localService === true)
+      // Prioritize high-quality voices (Google/Microsoft online voices are much louder and clearer)
+      // 1. Try premium Google UK English Male voice first
+      let best = voices.find(v => v.name.toLowerCase() === 'google uk english male')
 
-      // 2. Try preferred local voices by name (e.g., daniel, james, hazel, george) that are localService
+      // 2. Try other premium online voices
       if (!best) {
-        const preferredNames = ['daniel', 'james', 'hazel', 'george', 'susan']
-        for (const pref of preferredNames) {
-          best = voices.find(v => v.name.toLowerCase().includes(pref) && v.localService === true)
-          if (best) break
-        }
-      }
-
-      // 3. Try any en-US or en-* local voice (e.g., Microsoft David, Zira, Mark, etc.)
-      if (!best) {
-        best = voices.find(v => v.lang.toLowerCase().startsWith('en') && v.localService === true)
-      }
-
-      // 4. Fallback to preferred online voices if no local English voice is found
-      if (!best) {
-        const onlinePreferred = [
-          'google uk english male',
-          'microsoft ryan online',
-          'microsoft ryan',
-          'daniel',
-          'james',
-        ]
-        for (const pref of onlinePreferred) {
+        const premiumOnline = ['google uk english female', 'microsoft ryan online', 'google us english', 'microsoft ryan', 'daniel', 'james']
+        for (const pref of premiumOnline) {
           best = voices.find(v => v.name.toLowerCase().includes(pref))
           if (best) break
         }
       }
 
-      // 5. Fallback to any en-GB voice (online or local)
+      // 3. Try any en-GB local voice
+      if (!best) best = voices.find(v => v.lang.toLowerCase().includes('en-gb') && v.localService === true)
+      
+      // 4. Try any en-* local voice
+      if (!best) best = voices.find(v => v.lang.toLowerCase().startsWith('en') && v.localService === true)
+
+      // 5. Fallback to any en-GB voice
       if (!best) best = voices.find(v => v.lang.toLowerCase().includes('en-gb'))
 
-      // 6. Fallback to any English voice
-      if (!best) best = voices.find(v => v.lang.toLowerCase().startsWith('en'))
-
-      // 7. Ultimate fallback
-      if (!best) best = voices[0]
+      // 6. Ultimate fallback
+      if (!best) best = voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0]
 
       selectedVoiceRef.current = best
-      console.log('JARVIS voice selected:', best?.name, best?.lang, 'localService:', best?.localService)
+      console.log('Voice selected:', best?.name, best?.lang, 'localService:', best?.localService)
     }
 
     loadVoices()
@@ -147,7 +130,8 @@ function App() {
 
   // ═══ Initialize Speech Recognition with Auto-Submit in Both Modes ═══
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    // Prefer webkitSpeechRecognition as it's the stable Chromium/Edge implementation
+    const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition()
       recognitionRef.current.continuous = true
@@ -560,93 +544,75 @@ function App() {
 
       {jarvisMode ? (
         /* ═══════════════════ JARVIS MODE ═══════════════════ */
-        <div className="relative w-full max-w-4xl h-[100dvh] sm:h-[95dvh] md:h-[90vh] flex flex-col">
+        <div className="relative w-full max-w-6xl h-[100dvh] sm:h-[95dvh] md:h-[90vh] flex flex-col md:flex-row gap-4 md:gap-8">
           
-          {/* JARVIS Header */}
-          <header className="p-3 sm:p-4 flex justify-between items-center border-b border-red-500/10 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center shadow-lg shadow-red-500/30">
-                <Bot className="text-white w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-base sm:text-lg font-bold tracking-tight text-white">J.A.R.V.I.S</h1>
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "w-2 h-2 rounded-full animate-pulse",
-                    jarvisState === 'idle' ? "bg-red-500" : 
-                    jarvisState === 'listening' ? "bg-red-400" :
-                    jarvisState === 'processing' ? "bg-amber-500" :
-                    "bg-red-300"
-                  )} />
-                  <span className="text-[10px] text-red-400/80 font-bold uppercase tracking-widest">
-                    {jarvisStatusText}
-                  </span>
+          {/* Left Panel: Avatar & Controls */}
+          <div className="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-red-500/10 relative pb-6 md:pb-0">
+            {/* JARVIS Header */}
+            <header className="p-3 sm:p-4 flex justify-between items-center flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center shadow-lg shadow-red-500/30">
+                  <Bot className="text-white w-5 h-5" />
+                </div>
+                <div>
+                  <h1 className="text-base sm:text-lg font-bold tracking-tight text-white">J.A.R.V.I.S</h1>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "w-2 h-2 rounded-full animate-pulse",
+                      jarvisState === 'idle' ? "bg-red-500" : 
+                      jarvisState === 'listening' ? "bg-red-400" :
+                      jarvisState === 'processing' ? "bg-amber-500" :
+                      "bg-red-300"
+                    )} />
+                    <span className="text-[10px] text-red-400/80 font-bold uppercase tracking-widest">
+                      {jarvisStatusText}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={newSession}
-                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-red-400 transition-all" 
-                title="New Session"
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={toggleJarvisMode}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all text-sm font-semibold"
-              >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">Exit</span>
-              </button>
-            </div>
-          </header>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={newSession}
+                  className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-red-400 transition-all" 
+                  title="New Session"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={toggleJarvisMode}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all text-sm font-semibold"
+                >
+                  <X className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exit</span>
+                </button>
+              </div>
+            </header>
 
-          {/* JARVIS Avatar Section */}
-          <div className="flex flex-col items-center justify-center py-6 sm:py-10 flex-shrink-0 relative">
-            <div className={cn("jarvis-avatar", `jarvis-${jarvisState}`)}>
-              <div className="jarvis-glow" />
-              <div className="jarvis-ring jarvis-ring-3" />
-              <div className="jarvis-ring jarvis-ring-2" />
-              <div className="jarvis-ring jarvis-ring-1" />
-              <div className="jarvis-core" />
+            {/* JARVIS Avatar Section */}
+            <div className="flex-1 flex flex-col items-center justify-center py-6 sm:py-10 flex-shrink-0 relative">
+              <div className={cn("jarvis-avatar", `jarvis-${jarvisState}`)}>
+                <div className="jarvis-glow" />
+                <div className="jarvis-ring jarvis-ring-3" />
+                <div className="jarvis-ring jarvis-ring-2" />
+                <div className="jarvis-ring jarvis-ring-1" />
+                <div className="jarvis-core" />
+              </div>
+              <motion.p 
+                key={jarvisState}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-5 text-xs sm:text-sm font-bold tracking-[0.2em] uppercase text-red-400/70"
+              >
+                {jarvisStatusText}
+              </motion.p>
             </div>
-            <motion.p 
-              key={jarvisState}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-5 text-xs sm:text-sm font-bold tracking-[0.2em] uppercase text-red-400/70"
-            >
-              {jarvisStatusText}
-            </motion.p>
           </div>
 
-          {/* Messages Area */}
-          <main className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 space-y-4 min-h-0">
+          {/* Right Panel: Messages Area */}
+          <main className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-8 py-4 sm:py-8 space-y-4 min-h-0 md:max-w-xl w-full mx-auto flex flex-col">
             {renderMessages(true)}
             <div ref={messagesEndRef} />
           </main>
-
-          {/* JARVIS Input Area */}
-          <footer className="p-3 sm:p-4 border-t border-red-500/10 bg-black/40 backdrop-blur-md flex-shrink-0">
-            <div className="flex gap-2 sm:gap-3 items-center">
-              {/* Text Input - full width, hands-free voice takes priority */}
-              <div className="relative flex-1">
-                <input 
-                  type="text" 
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                  disabled={isLoading}
-                  placeholder="Or type a message..." 
-                  className="w-full bg-white/[0.03] border border-red-500/10 rounded-2xl px-4 sm:px-5 py-3 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500/30 transition-all text-sm disabled:opacity-50 text-slate-200 placeholder:text-slate-600"
-                />
-              </div>
-            </div>
-            <p className="text-center text-[9px] text-slate-600 mt-3 font-medium uppercase tracking-widest">
-              Voice-activated · Auto-listen enabled
-            </p>
-          </footer>
         </div>
 
       ) : (
