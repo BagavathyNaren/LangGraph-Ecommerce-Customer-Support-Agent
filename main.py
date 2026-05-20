@@ -124,7 +124,7 @@ class ChatRequest(BaseModel):
 async def tts_proxy(text: str):
     """
     Proxy TTS audio through the backend using OpenAI's TTS API.
-    Uses the 'onyx' voice (deep male) for loud and clear output.
+    Uses the 'echo' voice (clear, warm male) and tts-1-hd for loud and clear output.
     """
     import requests as req
     from fastapi.responses import Response as FastResponse
@@ -139,12 +139,12 @@ async def tts_proxy(text: str):
             "Content-Type": "application/json"
         }
         data = {
-            "model": "tts-1",
+            "model": "tts-1-hd",
             "input": text,
-            "voice": "onyx",
+            "voice": "echo",
             "response_format": "mp3"
         }
-        r = req.post(url, headers=headers, json=data, timeout=15)
+        r = req.post(url, headers=headers, json=data, timeout=20)
         r.raise_for_status()
         return FastResponse(
             content=r.content,

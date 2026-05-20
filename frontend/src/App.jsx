@@ -188,27 +188,12 @@ function App() {
     }
   }
 
-  // Split text into chunks ≤ 200 chars at sentence boundaries
-  const buildChunks = (text) => {
-    const cleaned = cleanTextForSpeech(text)
-    if (!cleaned.trim()) return []
-    const sentences = cleaned.match(/[^.!?;]+[.!?;]*/g) || [cleaned]
-    const chunks = []
-    let cur = ''
-    for (const s of sentences) {
-      if ((cur + s).length > 190 && cur) { chunks.push(cur.trim()); cur = s }
-      else cur += s
-    }
-    if (cur.trim()) chunks.push(cur.trim())
-    return chunks
-  }
-
   const speak = async (text) => {
     if (!voiceEnabled && !jarvisModeRef.current) return
     stopAudio()
 
-    const chunks = buildChunks(text)
-    if (!chunks.length) return
+    const cleanedText = cleanTextForSpeech(text).trim()
+    if (!cleanedText) return
 
     const BASE_URL = 'https://ecommerce-support-agent-93337753347.us-central1.run.app'
     const isJarvis = jarvisModeRef.current
@@ -217,61 +202,55 @@ function App() {
     // AbortController so stopAudio() can cancel any in-flight fetch
     const abortCtrl = new AbortController()
 
-    // Play chunks sequentially via backend /tts proxy → blob URL
-    // Using blob: URLs bypasses ALL autoplay restrictions and CORS issues
-    const playChunk = async (index) => {
-      if (abortCtrl.signal.aborted) return
-      if (index >= chunks.length) {
-        // All chunks done — restart JARVIS mic
-        if (isJarvis && jarvisModeRef.current) {
-          setJarvisState('idle')
-          setTimeout(() => { if (jarvisModeRef.current) startListening() }, 700)
+    let blobUrl = null
+    try {
+      // Store abort function so stopAudio() can cancel in-flight fetches
+      currentAudioRef.current = { _abort: () => abortCtrl.abort() }
+
+      // Fetch MP3 from our own backend proxy in one single continuous stream
+      const resp = await fetch(
+        `${BASE_URL}/tts?text=${encodeURIComponent(cleanedText)}`,
+        { signal: abortCtrl.signal }
+      )
+      if (!resp.ok) throw new Error(`TTS fetch failed: ${resp.status}`)
+      const blob = await resp.blob()
+      blobUrl = URL.createObjectURL(blob)
+
+      const audio = new Audio(blobUrl)
+      audio.volume = 1.0
+      currentAudioRef.current = audio
+
+      await new Promise((resolve) => {
+        audio.onended = resolve
+        audio.onerror = (e) => {
+          console.warn('Audio playback error', e)
+          resolve()
         }
-        return
-      }
-
-      const chunk = chunks[index]
-      let blobUrl = null
-      try {
-        // Fetch MP3 from our own backend proxy (no CORS issues, same origin)
-        const resp = await fetch(
-          `${BASE_URL}/tts?text=${encodeURIComponent(chunk)}`,
-          { signal: abortCtrl.signal }
-        )
-        if (!resp.ok) throw new Error(`TTS fetch failed: ${resp.status}`)
-        const blob = await resp.blob()
-        blobUrl = URL.createObjectURL(blob)
-
-        const audio = new Audio(blobUrl)
-        audio.volume = 1.0
-        currentAudioRef.current = audio
-
-        await new Promise((resolve) => {
-          audio.onended = resolve
-          audio.onerror = (e) => {
-            console.warn('Audio playback error chunk', index, e)
-            resolve()
-          }
-          // play() always succeeds with blob: URLs (same-origin, not cross-origin)
-          audio.play().catch((e) => {
-            console.warn('Audio.play() rejected:', e)
-            resolve()
-          })
+        audio.play().catch((e) => {
+          console.warn('Audio.play() rejected:', e)
+          resolve()
         })
-      } catch (e) {
-        if (e.name === 'AbortError') return  // stopAudio() was called, bail out
-        console.error('TTS chunk error:', e)
-      } finally {
-        if (blobUrl) URL.revokeObjectURL(blobUrl)
-        currentAudioRef.current = null
+      })
+
+      // When done, restart JARVIS mic if still in JARVIS mode
+      if (isJarvis && jarvisModeRef.current) {
+        setJarvisState('idle')
+        setTimeout(() => { if (jarvisModeRef.current) startListening() }, 700)
       }
-
-      await playChunk(index + 1)
+    } catch (e) {
+      if (e.name === 'AbortError') return  // stopAudio() was called, bail out
+      console.error('TTS fetch error:', e)
+      // On error, revert to idle so it doesn't get stuck
+      if (isJarvis && jarvisModeRef.current) {
+        setJarvisState('idle')
+        setTimeout(() => { if (jarvisModeRef.current) startListening() }, 700)
+      }
+    } finally {
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+      if (currentAudioRef.current && currentAudioRef.current.src === blobUrl) {
+         currentAudioRef.current = null
+      }
     }
-
-    // Store abort function so stopAudio() can cancel in-flight fetches
-    currentAudioRef.current = { _abort: () => abortCtrl.abort() }
-    await playChunk(0)
   }
 
   // ═══ Mic controls ═══
