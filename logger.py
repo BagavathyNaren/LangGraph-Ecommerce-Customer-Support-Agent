@@ -16,6 +16,8 @@ class JSONFormatter(logging.Formatter):
         log_entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
+            "severity": record.levelname,
+            "logging.googleapis.com/severity": record.levelname, # Native GCP Structured Logging mapping
             "logger": record.name,
             "message": record.getMessage(),
         }

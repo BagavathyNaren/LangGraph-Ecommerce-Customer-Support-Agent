@@ -9,3 +9,4 @@ class AgentState(MessagesState):
     retry_count: int = 0
     refund_amount: float = 0.0
     escalated: bool = False
+    react_iterations: int = 0

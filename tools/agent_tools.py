@@ -2,7 +2,8 @@ from langchain_core.tools import tool
 from tools.real_tools import (
     get_order_status, get_refund_status, initiate_return,
     cancel_order, get_customer_orders, place_new_order,
-    register_new_customer, get_analytics_summary
+    register_new_customer, get_analytics_summary,
+    search_products
 )
 import re
 
@@ -10,7 +11,7 @@ ORDER_ID_PATTERN = re.compile(r"^ORD\d{3,10}$")
 
 # Phonetic aliases the speech-recognition API commonly transcribes instead of "ORD"
 _PHONETIC_ORD_PREFIX = re.compile(
-    r'^(?:odd|or\s*d|o\.?r\.?d\.?|0rd|ord)\s*[-\s]*',
+    r'^(?:odd|or\s*d|o\.?r\.?d\.?|0rd|ord|od)\s*[-\s]*',
     re.IGNORECASE
 )
 
@@ -30,7 +31,19 @@ def normalize_order_id(order_id: str) -> str:
     # Step 3: strip all remaining separators (spaces, dashes, dots, underscores, colons)
     normalized = re.sub(r'[\s\-_\.:\(\)]+', '', normalized)
     # Step 4: uppercase everything
-    return normalized.upper()
+    normalized = normalized.upper()
+    
+    # Step 5: If the remaining string is purely digits, prepend ORD
+    if re.match(r'^\d+$', normalized):
+        normalized = f"ORD{normalized}"
+        
+    # Step 6: Normalize the numeric part to handle extra/missing zeros (e.g., ORD04 -> ORD004, ORD0001 -> ORD001)
+    match = re.match(r"^(ORD)(\d+)$", normalized)
+    if match:
+        prefix, number_str = match.groups()
+        normalized = f"{prefix}{str(int(number_str)).zfill(3)}"
+        
+    return normalized
 
 @tool
 def check_order_status(order_id: str) -> str:
@@ -60,8 +73,10 @@ def process_return(order_id: str, reason: str = "customer request") -> str:
     return str(result)
 
 @tool
-def process_cancellation(order_id: str) -> str:
-    """Cancel a pending or processing order. Use when a customer wants to cancel. Requires order ID like ORD001."""
+def process_cancellation(order_id: str, reason: str = None) -> str:
+    """Cancel a pending or processing order. Use when a customer wants to cancel. Requires order ID like ORD001 AND a valid reason for cancellation."""
+    if not reason or reason.strip().lower() in ["none", "customer request"]:
+        return "Please provide a reason for cancelling the order."
     order_id = normalize_order_id(order_id)
     if not ORDER_ID_PATTERN.match(order_id):
         return f"I couldn't find an order with ID '{order_id}'. Order IDs start with ORD followed by digits (e.g., ORD001). Could you please confirm your order ID?"
@@ -71,29 +86,53 @@ def process_cancellation(order_id: str) -> str:
 @tool
 def lookup_customer_orders(customer_name: str) -> str:
     """Look up all orders for a customer by their name. Use when a customer says their name and asks about their orders. Do NOT use with email addresses — suggest searching by name instead."""
+    import json as _json
     result = get_customer_orders(customer_name)
-    return str(result)
+    return _json.dumps(result, default=str)
 
 from langchain_core.runnables import RunnableConfig
 
 @tool
-def register_customer(name: str, email: str, config: RunnableConfig, phone_number: str = None) -> str:
-    """Register a new customer account. Use when a customer wants to register or place an order. Requires their full name and a valid email address provided by the customer in the chat."""
-    # Use the verified email extracted from the customer's message (not LLM-hallucinated)
-    real_email = config.get("configurable", {}).get("raw_email")
+def register_customer(name: str, email: str, country: str, config: RunnableConfig, phone_number: str | None = None) -> str:
+    """Register a new customer account. Use when a customer wants to register or place an order. Requires their full name, a valid email address provided by the customer in the chat, and their country. Ask for their country if you don't know it."""
+    if email:
+        email = email.lower().replace(" at ", "@").replace(" ", "")
+    real_email = email if (email and "@" in email) else config.get("configurable", {}).get("raw_email")
     if not real_email:
         return (
             "ERROR: No valid email address found in the customer's message. "
             "Do NOT call this tool again — instead ask the customer to provide their email address in the chat."
         )
-    result = register_new_customer(name, real_email, phone_number)
+    result = register_new_customer(name, real_email, phone_number, country)
     return str(result)
 
 @tool
-def create_new_order(customer_name: str, item: str, config: RunnableConfig) -> str:
-    """Place a new order for a customer. Use ONLY when a customer explicitly wants to BUY or PURCHASE a new product. Do NOT use for complaints, stolen items, or support issues."""
-    email = config.get("configurable", {}).get("raw_email")
-    result = place_new_order(customer_name, item, email)
+def search_catalog(query: str, country: str) -> str:
+    """Search the product catalog for items to purchase. ALWAYS use this before placing an order.
+    Returns a list of matching products, prices, and product IDs. Requires the country."""
+    result = search_products(query, country)
+    return str(result)
+
+@tool
+def search_retailer_platform(platform: str, query: str, country: str) -> str:
+    """Real-time web search for products on a specific retailer platform (amazon, flipkart, or croma) in a specific country. 
+    Returns a list of matching products and estimated prices. Requires the country."""
+    from tools.real_tools import fetch_retailer_data
+    result = fetch_retailer_data(platform, query, country)
+    return str(result)
+
+from langchain_core.runnables import RunnableConfig
+
+@tool
+def create_new_order(customer_name: str, item: str, config: RunnableConfig, email: str | None = None, product_id: str | None = None, price: str | None = None, currency: str | None = None, source_website: str | None = None) -> str:
+    """Place a new order for a customer. 
+    Use 'product_id' if the customer selected a specific pre-existing product.
+    If the product was found via 'search_retailer_platform', pass the 'price', 'currency' (e.g. INR, USD), and 'source_website' so the product can be dynamically inserted into the catalog.
+    Email is only required if the customer is completely new and not registered yet."""
+    if email:
+        email = email.lower().replace(" at ", "@").replace(" ", "")
+    real_email = email if (email and "@" in email) else config.get("configurable", {}).get("raw_email")
+    result = place_new_order(customer_name, item, real_email, product_id, price, currency, source_website)
     return str(result)
 
 @tool
@@ -138,6 +177,8 @@ AGENT_TOOLS = [
     process_cancellation,
     lookup_customer_orders,
     register_customer,
+    search_catalog,
+    search_retailer_platform,
     create_new_order,
     create_support_ticket,
     view_business_analytics

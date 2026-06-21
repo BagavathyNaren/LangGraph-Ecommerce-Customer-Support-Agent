@@ -138,11 +138,14 @@ def send_email(to_email: str, subject: str, body: str):
     if not to_email:
         return
 
-    def _worker():
-        provider = get_email_provider()
-        provider.send(to_email, subject, body)
+    def _send_task():
+        try:
+            provider = get_email_provider()
+            provider.send(to_email, subject, body)
+        except Exception as e:
+            logger.error(f"Async email task failed: {e}")
 
-    thread = threading.Thread(target=_worker)
+    thread = threading.Thread(target=_send_task)
     thread.daemon = True
     thread.start()
 

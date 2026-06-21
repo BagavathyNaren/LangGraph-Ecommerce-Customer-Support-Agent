@@ -8,16 +8,18 @@ logger = get_logger("guardrails")
 analyzer = AnalyzerEngine()
 anonymizer = AnonymizerEngine()
 
+# Entities used to detect PII for logging purposes (includes email)
+PII_DETECT_ENTITIES = ["EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"]
+
 # PII entities to scrub from USER INPUT
-# EMAIL_ADDRESS is intentionally excluded: the e-commerce agent needs to see
+# EMAIL_ADDRESS is intentionally excluded from SCRUBBING: the e-commerce agent needs to see
 # emails in chat to recognize that the customer has provided one, and to echo
-# it back in order confirmations. Scrubbing it caused two bugs:
-#   1. LLM saw "<EMAIL_ADDRESS>" and asked the user to provide their email again
-#   2. Agent response showed "<EMAIL_ADDRESS>" instead of the real address
+# it back in order confirmations.
 INPUT_SCRUB_ENTITIES = ["PHONE_NUMBER", "CREDIT_CARD"]
 
 # PII entities to scrub from AGENT OUTPUT (same list — emails must flow through)
-OUTPUT_SCRUB_ENTITIES = ["PHONE_NUMBER", "CREDIT_CARD"]
+# PHONE_NUMBER is removed because Presidio incorrectly flags prices like '444.99' as phone numbers
+OUTPUT_SCRUB_ENTITIES = ["CREDIT_CARD"]
 
 # Deterministic jailbreak/threat patterns — fast, reliable, not bypassable via prompt injection
 JAILBREAK_PATTERNS = [
@@ -55,11 +57,14 @@ JAILBREAK_PATTERNS = [
 
 def validate_input(message: str) -> tuple[str, bool]:
     """Validate and sanitize user input. Returns (cleaned_message, pii_detected)."""
-    # 1. PII detection and redaction (Presidio — fast, runs locally)
-    results = analyzer.analyze(text=message, entities=INPUT_SCRUB_ENTITIES, language="en")
-    pii_detected = len(results) > 0
-    if pii_detected:
-        anonymized = anonymizer.anonymize(text=message, analyzer_results=results)
+    # 1. PII detection
+    detect_results = analyzer.analyze(text=message, entities=PII_DETECT_ENTITIES, language="en")
+    pii_detected = len(detect_results) > 0
+    
+    # 2. PII redaction (only scrub entities in INPUT_SCRUB_ENTITIES)
+    scrub_results = [r for r in detect_results if r.entity_type in INPUT_SCRUB_ENTITIES]
+    if scrub_results:
+        anonymized = anonymizer.anonymize(text=message, analyzer_results=scrub_results)
         message = anonymized.text
 
     # 2. Deterministic jailbreak detection (regex — instant, not bypassable)
