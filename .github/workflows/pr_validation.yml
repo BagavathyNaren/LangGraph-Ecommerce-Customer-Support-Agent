@@ -75,4 +75,13 @@ jobs:
           TAVILY_API_KEY: "tvly-dummy-key"
           SERPER_API_KEY: "serper-dummy-key"
         run: |
-          python -m pytest tests/test_nodes.py tests/test_real_tools.py -v
+          python -m pytest tests/test_nodes.py tests/test_real_tools.py -v --tb=long 2>&1 | tee test_output.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test_output.log
+
