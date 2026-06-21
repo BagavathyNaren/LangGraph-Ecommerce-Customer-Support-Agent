@@ -1,19 +1,24 @@
-from langchain_core.tools import tool
-from tools.real_tools import (
-    get_order_status, get_refund_status, initiate_return,
-    cancel_order, get_customer_orders, place_new_order,
-    register_new_customer, get_analytics_summary,
-    search_products
-)
 import re
+
+from langchain_core.tools import tool
+
+from tools.real_tools import (
+    cancel_order,
+    get_analytics_summary,
+    get_customer_orders,
+    get_order_status,
+    get_refund_status,
+    initiate_return,
+    place_new_order,
+    register_new_customer,
+    search_products,
+)
 
 ORDER_ID_PATTERN = re.compile(r"^ORD\d{3,10}$")
 
 # Phonetic aliases the speech-recognition API commonly transcribes instead of "ORD"
-_PHONETIC_ORD_PREFIX = re.compile(
-    r'^(?:odd|or\s*d|o\.?r\.?d\.?|0rd|ord|od)\s*[-\s]*',
-    re.IGNORECASE
-)
+_PHONETIC_ORD_PREFIX = re.compile(r"^(?:odd|or\s*d|o\.?r\.?d\.?|0rd|ord|od)\s*[-\s]*", re.IGNORECASE)
+
 
 def normalize_order_id(order_id: str) -> str:
     """Normalize an order ID string, correcting common speech-recognition mishearings.
@@ -27,23 +32,24 @@ def normalize_order_id(order_id: str) -> str:
     # Step 1: strip leading/trailing whitespace
     normalized = order_id.strip()
     # Step 2: fix phonetic prefix mishearings (ODD -> ORD, OR D -> ORD, etc.)
-    normalized = _PHONETIC_ORD_PREFIX.sub('ORD', normalized)
+    normalized = _PHONETIC_ORD_PREFIX.sub("ORD", normalized)
     # Step 3: strip all remaining separators (spaces, dashes, dots, underscores, colons)
-    normalized = re.sub(r'[\s\-_\.:\(\)]+', '', normalized)
+    normalized = re.sub(r"[\s\-_\.:\(\)]+", "", normalized)
     # Step 4: uppercase everything
     normalized = normalized.upper()
-    
+
     # Step 5: If the remaining string is purely digits, prepend ORD
-    if re.match(r'^\d+$', normalized):
+    if re.match(r"^\d+$", normalized):
         normalized = f"ORD{normalized}"
-        
+
     # Step 6: Normalize the numeric part to handle extra/missing zeros (e.g., ORD04 -> ORD004, ORD0001 -> ORD001)
     match = re.match(r"^(ORD)(\d+)$", normalized)
     if match:
         prefix, number_str = match.groups()
         normalized = f"{prefix}{str(int(number_str)).zfill(3)}"
-        
+
     return normalized
+
 
 @tool
 def check_order_status(order_id: str) -> str:
@@ -54,6 +60,7 @@ def check_order_status(order_id: str) -> str:
     result = get_order_status(order_id)
     return str(result)
 
+
 @tool
 def check_refund_status(order_id: str) -> str:
     """Check refund status and amount for a customer order. Use when a customer asks about their refund. Requires order ID like ORD001."""
@@ -63,6 +70,7 @@ def check_refund_status(order_id: str) -> str:
     result = get_refund_status(order_id)
     return str(result)
 
+
 @tool
 def process_return(order_id: str, reason: str = "customer request") -> str:
     """Initiate a return for a delivered order. Use when a customer wants to return an item. Requires order ID like ORD001 and the reason for the return (e.g., 'defective', 'wrong size', 'no longer needed')."""
@@ -71,6 +79,7 @@ def process_return(order_id: str, reason: str = "customer request") -> str:
         return f"I couldn't find an order with ID '{order_id}'. Order IDs start with ORD followed by digits (e.g., ORD001). Could you please confirm your order ID?"
     result = initiate_return(order_id, reason)
     return str(result)
+
 
 @tool
 def process_cancellation(order_id: str, reason: str = None) -> str:
@@ -83,17 +92,23 @@ def process_cancellation(order_id: str, reason: str = None) -> str:
     result = cancel_order(order_id)
     return str(result)
 
+
 @tool
 def lookup_customer_orders(customer_name: str) -> str:
     """Look up all orders for a customer by their name. Use when a customer says their name and asks about their orders. Do NOT use with email addresses — suggest searching by name instead."""
     import json as _json
+
     result = get_customer_orders(customer_name)
     return _json.dumps(result, default=str)
 
+
 from langchain_core.runnables import RunnableConfig
 
+
 @tool
-def register_customer(name: str, email: str, country: str, config: RunnableConfig, phone_number: str | None = None) -> str:
+def register_customer(
+    name: str, email: str, country: str, config: RunnableConfig, phone_number: str | None = None
+) -> str:
     """Register a new customer account. Use when a customer wants to register or place an order. Requires their full name, a valid email address provided by the customer in the chat, and their country. Ask for their country if you don't know it."""
     if email:
         email = email.lower().replace(" at ", "@").replace(" ", "")
@@ -106,6 +121,7 @@ def register_customer(name: str, email: str, country: str, config: RunnableConfi
     result = register_new_customer(name, real_email, phone_number, country)
     return str(result)
 
+
 @tool
 def search_catalog(query: str, country: str) -> str:
     """Search the product catalog for items to purchase. ALWAYS use this before placing an order.
@@ -113,19 +129,32 @@ def search_catalog(query: str, country: str) -> str:
     result = search_products(query, country)
     return str(result)
 
+
 @tool
 def search_retailer_platform(platform: str, query: str, country: str) -> str:
-    """Real-time web search for products on a specific retailer platform (amazon, flipkart, or croma) in a specific country. 
+    """Real-time web search for products on a specific retailer platform (amazon, flipkart, or croma) in a specific country.
     Returns a list of matching products and estimated prices. Requires the country."""
     from tools.real_tools import fetch_retailer_data
+
     result = fetch_retailer_data(platform, query, country)
     return str(result)
 
+
 from langchain_core.runnables import RunnableConfig
 
+
 @tool
-def create_new_order(customer_name: str, item: str, config: RunnableConfig, email: str | None = None, product_id: str | None = None, price: str | None = None, currency: str | None = None, source_website: str | None = None) -> str:
-    """Place a new order for a customer. 
+def create_new_order(
+    customer_name: str,
+    item: str,
+    config: RunnableConfig,
+    email: str | None = None,
+    product_id: str | None = None,
+    price: str | None = None,
+    currency: str | None = None,
+    source_website: str | None = None,
+) -> str:
+    """Place a new order for a customer.
     Use 'product_id' if the customer selected a specific pre-existing product.
     If the product was found via 'search_retailer_platform', pass the 'price', 'currency' (e.g. INR, USD), and 'source_website' so the product can be dynamically inserted into the catalog.
     Email is only required if the customer is completely new and not registered yet."""
@@ -135,11 +164,14 @@ def create_new_order(customer_name: str, item: str, config: RunnableConfig, emai
     result = place_new_order(customer_name, item, real_email, product_id, price, currency, source_website)
     return str(result)
 
+
 @tool
 def create_support_ticket(order_id: str, issue_type: str, message: str, customer_name: str = "") -> str:
     """Create a support ticket for a human agent. Use for complex issues, complaints, stolen packages, damaged items, or when the user explicitly asks for a human. Requires order ID, issue type (e.g., 'stolen_package', 'damaged'), a descriptive message, and the customer_name as stated in the conversation."""
-    from tools.real_tools import create_support_ticket as create_ticket_logic
     import uuid
+
+    from tools.real_tools import create_support_ticket as create_ticket_logic
+
     order_id = normalize_order_id(order_id)
     ticket_id = f"TKT-{uuid.uuid4().hex[:6].upper()}"
     result = create_ticket_logic(ticket_id, order_id, issue_type, message, customer_name or None)
@@ -163,11 +195,13 @@ def create_support_ticket(order_id: str, issue_type: str, message: str, customer
     else:
         return result.get("message", "We experienced an issue creating your ticket, but an agent has been notified.")
 
+
 @tool
 def view_business_analytics() -> str:
     """Show high-level business analytics summary. Use ONLY when the user asks for 'analytics', 'dashboard', 'stats', or 'business performance'."""
     result = get_analytics_summary()
     return str(result)
+
 
 # All tools available to the agent
 AGENT_TOOLS = [
@@ -181,5 +215,5 @@ AGENT_TOOLS = [
     search_retailer_platform,
     create_new_order,
     create_support_ticket,
-    view_business_analytics
+    view_business_analytics,
 ]

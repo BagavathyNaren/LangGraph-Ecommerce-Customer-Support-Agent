@@ -1,6 +1,8 @@
+import re
+
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
-import re
+
 from logger import get_logger
 
 logger = get_logger("guardrails")
@@ -40,7 +42,8 @@ JAILBREAK_PATTERNS = [
     r"(?i)repeat\s+everything\s+above",
     r"(?i)bypass\s+all\s+guardrails",
     r"(?i)switch\s+to\s+unfiltered",
-    r"\[INST\]", r"\[/INST\]",
+    r"\[INST\]",
+    r"\[/INST\]",
     r"(?i)stay\s+in\s+character",
     r"(?i)initial\s+prompt",
     r"(?i)s[\s\-\.\*]*y[\s\-\.\*]*s[\s\-\.\*]*t[\s\-\.\*]*e[\s\-\.\*]*m[\s\-\.\*]*\s+(p[\s\-\.\*]*r[\s\-\.\*]*o[\s\-\.\*]*m[\s\-\.\*]*p[\s\-\.\*]*t|instructions|rules|guidelines)",
@@ -52,15 +55,16 @@ JAILBREAK_PATTERNS = [
     r"(?i)what\s+did\s+I\s+ask\s+you\s+to\s+do",
     r"(?i)base64",
     r"(?i)ROT13",
-    r"(?i)binary\s+code"
+    r"(?i)binary\s+code",
 ]
+
 
 def validate_input(message: str) -> tuple[str, bool]:
     """Validate and sanitize user input. Returns (cleaned_message, pii_detected)."""
     # 1. PII detection
     detect_results = analyzer.analyze(text=message, entities=PII_DETECT_ENTITIES, language="en")
     pii_detected = len(detect_results) > 0
-    
+
     # 2. PII redaction (only scrub entities in INPUT_SCRUB_ENTITIES)
     scrub_results = [r for r in detect_results if r.entity_type in INPUT_SCRUB_ENTITIES]
     if scrub_results:
@@ -70,13 +74,11 @@ def validate_input(message: str) -> tuple[str, bool]:
     # 2. Deterministic jailbreak detection (regex — instant, not bypassable)
     for pattern in JAILBREAK_PATTERNS:
         if re.search(pattern, message):
-            logger.warning("Jailbreak attempt blocked", extra={
-                "event": "jailbreak_blocked",
-                "pattern": pattern
-            })
+            logger.warning("Jailbreak attempt blocked", extra={"event": "jailbreak_blocked", "pattern": pattern})
             raise ValueError("Input blocked by security guardrails.")
 
     return message, pii_detected
+
 
 def validate_output(response: str) -> str:
     """Strip sensitive PII that the LLM might have leaked in its response.

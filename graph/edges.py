@@ -1,5 +1,7 @@
-from graph.state import AgentState
 from langchain_core.messages import AIMessage
+
+from graph.state import AgentState
+
 
 def should_continue(state: AgentState) -> str:
     """Route after the agent node: call tools or move to escalation check."""
@@ -11,6 +13,7 @@ def should_continue(state: AgentState) -> str:
 
     # Otherwise the agent is done — check for escalation
     return "escalation_check"
+
 
 def route_escalation(state: AgentState) -> str:
     """Route after escalation check: escalate or end."""

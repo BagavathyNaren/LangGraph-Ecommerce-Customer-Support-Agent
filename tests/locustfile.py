@@ -1,5 +1,7 @@
 import random
-from locust import HttpUser, task, between
+
+from locust import HttpUser, between, task
+
 
 class ECommerceAgentLoadTestUser(HttpUser):
     # Simulated wait time between tasks: 1 to 3 seconds
@@ -18,7 +20,7 @@ class ECommerceAgentLoadTestUser(HttpUser):
             "Hello! I am your e-commerce assistant.",
             "Certainly! Let me check the order status for you.",
             "Can you please provide your email address?",
-            "Your refund has been approved successfully."
+            "Your refund has been approved successfully.",
         ]
         text_query = random.choice(phrases)
         self.client.get(f"/tts?text={text_query}")
@@ -30,6 +32,6 @@ class ECommerceAgentLoadTestUser(HttpUser):
             "message": "I want to buy a Playstation in Japan",
             "history": [],
             "userId": "locust-load-test-user-123",
-            "voiceEnabled": False
+            "voiceEnabled": False,
         }
         self.client.post("/chat", json=payload)

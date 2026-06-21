@@ -1,26 +1,33 @@
+import json
+import re as _re
+import uuid
+
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage, RemoveMessage
+
 from graph.state import AgentState
+from logger import get_logger
 from tools.agent_tools import AGENT_TOOLS
 from tools.real_tools import create_support_ticket
-import uuid
-import re as _re
-import json
-from logger import get_logger
 
 logger = get_logger("ecommerce-agent")
 
+
 def extract_customer_name(text: str) -> str | None:
     # Match variations of introduction, allowing optional comma, colon, and capturing the name
-    match = _re.search(r'(?:my\s+(?:full\s+)?name\s+is|I\s+am|I\'m|this\s+is)\s*[,:]?\s*([a-zA-Z\s]+?)(?:\.|$| and| but)', text, _re.IGNORECASE)
+    match = _re.search(
+        r"(?:my\s+(?:full\s+)?name\s+is|I\s+am|I\'m|this\s+is)\s*[,:]?\s*([a-zA-Z\s]+?)(?:\.|$| and| but)",
+        text,
+        _re.IGNORECASE,
+    )
     if not match:
         return None
     raw_name = match.group(1).strip()
-    
+
     # Normalize spaced out letters or weird word boundaries from speech recognition:
     # e.g., "a h i l a" -> "ahila", "a hila" -> "ahila", "a LIS" -> "alis", "Al is" -> "alis"
     normalized_name = raw_name
-    if _re.match(r'^([a-zA-Z]\s)+[a-zA-Z]$', raw_name):
+    if _re.match(r"^([a-zA-Z]\s)+[a-zA-Z]$", raw_name):
         normalized_name = raw_name.replace(" ", "")
     else:
         words = raw_name.split()
@@ -31,7 +38,7 @@ def extract_customer_name(text: str) -> str | None:
         elif len(words) > 2:
             if all(len(w) == 1 for w in words):
                 normalized_name = "".join(words)
-                
+
     return normalized_name.title()
 
 
@@ -93,7 +100,7 @@ ORDERING, REGISTRATION & PRODUCT SELECTION FLOW — FOLLOW THIS EXACTLY:
    - If the country is not explicitly provided in their first message (or conversation history), you MUST NOT call any product search tools (search_catalog or search_retailer_platform) in that turn. You must ONLY call `lookup_customer_orders` in that turn.
    - If both of the following are true: (1) the customer lookup returns "not_found" or does not contain a country, AND (2) the country is not mentioned anywhere in the conversation history (including the user's very first message), ONLY THEN you MUST stop and ask the user for their country before performing any searches. If the country was already mentioned in the conversation history, you MUST NOT ask for it; use that country and proceed immediately with the product search.
 3. **PRODUCT CATALOG & EXTERNAL RETAILERS (CRITICAL PLATFORM BOUNDARIES)**:
-   - If `search_catalog` returns no products, you MUST automatically search external retailer platforms by calling `search_retailer_platform`. 
+   - If `search_catalog` returns no products, you MUST automatically search external retailer platforms by calling `search_retailer_platform`.
    - For India, you MUST call it 3 separate times IN PARALLEL: once for "amazon", once for "flipkart", and once for "croma".
    - For any other country (e.g., USA, China, Japan, UAE, UK), search ONLY "amazon".
    - Present the options to the user clearly, GROUPED BY PLATFORM. You MUST use a strict platform header line (e.g., `### Amazon`) before listing its products. This is REQUIRED for the UI to render correctly.
@@ -102,7 +109,7 @@ ORDERING, REGISTRATION & PRODUCT SELECTION FLOW — FOLLOW THIS EXACTLY:
      ### Amazon
      Product Full Name Here
      Price: ￥47,959
-     
+
      Another Product Name
      Price: ￥81,980
      ```
@@ -144,15 +151,16 @@ TOOL_INTENT_MAP = {
 
 MAX_REACT_ITERATIONS = 15  # Hard safety cap to prevent infinite loops
 
+
 def agent_node(state: AgentState) -> AgentState:
     """The agent LLM decides what to do — call tools or respond directly with pruning."""
     # Reset intent and order_id at the start of a new user turn
     new_intent = None
     new_order_id = None
     react_iterations = state.get("react_iterations", 0)
-    
+
     is_new_user_turn = isinstance(state["messages"][-1], HumanMessage)
-    
+
     # If we are NOT in a new turn (e.g. still in a tool loop), keep existing values
     if not is_new_user_turn:
         new_intent = state.get("intent")
@@ -164,17 +172,18 @@ def agent_node(state: AgentState) -> AgentState:
 
     # ═══ SAFETY CAP: Prevent infinite ReAct loops ═══
     if react_iterations >= MAX_REACT_ITERATIONS:
-        logger.warning("ReAct loop cap reached", extra={
-            "event": "react_loop_cap_reached",
-            "iterations": react_iterations
-        })
-        fallback = AIMessage(content="I'm sorry, I encountered an issue while processing your request. I am escalating your case to a human support representative immediately.")
+        logger.warning(
+            "ReAct loop cap reached", extra={"event": "react_loop_cap_reached", "iterations": react_iterations}
+        )
+        fallback = AIMessage(
+            content="I'm sorry, I encountered an issue while processing your request. I am escalating your case to a human support representative immediately."
+        )
         return {
             "messages": [fallback],
             "intent": new_intent,
             "order_id": new_order_id,
             "react_iterations": 0,
-            "escalated": True  # Force immediate escalation routing
+            "escalated": True,  # Force immediate escalation routing
         }
 
     # PERSISTENCE OPTIMIZATION: Keep only the last 15 messages in the DB state
@@ -183,14 +192,14 @@ def agent_node(state: AgentState) -> AgentState:
     if len(state["messages"]) > 15:
         # Determine the cutoff point
         cutoff = len(state["messages"]) - 15
-        
+
         # Find the nearest HumanMessage at or after the cutoff to ensure a clean start
         safe_cutoff = 0
         for i in range(cutoff, len(state["messages"])):
             if isinstance(state["messages"][i], HumanMessage):
                 safe_cutoff = i
                 break
-        
+
         if safe_cutoff > 0:
             for i in range(safe_cutoff):
                 m = state["messages"][i]
@@ -198,7 +207,7 @@ def agent_node(state: AgentState) -> AgentState:
 
     messages = [SystemMessage(content=AGENT_SYSTEM_PROMPT)] + state["messages"]
     response = agent_llm.invoke(messages)
-    
+
     # ── Always resolve last_msg and current_customer_name first ──
     # These must be initialized before ANY guardrail runs, including Guardrail D
     # which fires on plain-text responses (no tool_calls) and would otherwise crash.
@@ -207,9 +216,29 @@ def agent_node(state: AgentState) -> AgentState:
         if isinstance(m, HumanMessage):
             last_msg = m
             break
-    
-    countries = ["japan", "india", "uae", "uk", "usa", "us", "united arab emirates", "united kingdom", "united states", "china", "canada", "germany", "france", "australia", "singapore", "spain", "italy", "brazil", "mexico"]
-    
+
+    countries = [
+        "japan",
+        "india",
+        "uae",
+        "uk",
+        "usa",
+        "us",
+        "united arab emirates",
+        "united kingdom",
+        "united states",
+        "china",
+        "canada",
+        "germany",
+        "france",
+        "australia",
+        "singapore",
+        "spain",
+        "italy",
+        "brazil",
+        "mexico",
+    ]
+
     # ── Strict Country Constraints Programmatic Reject Guardrail ──
     # Check if the user mentions an unsupported country in their last message
     if isinstance(last_msg, HumanMessage):
@@ -219,21 +248,40 @@ def agent_node(state: AgentState) -> AgentState:
             "japan": ["japan", "jp"],
             "us": ["us", "usa", "united states", "america"],
             "uk": ["uk", "united kingdom", "britain", "gb"],
-            "india": ["india", "in"]
+            "india": ["india", "in"],
         }
         unsupported_countries = [
-            "china", "canada", "germany", "france", "australia", "singapore", 
-            "spain", "italy", "brazil", "mexico", "russia", "netherlands", 
-            "sweden", "switzerland", "belgium", "norway", "denmark", "finland",
-            "ireland", "austria", "new zealand", "south africa", "korea"
+            "china",
+            "canada",
+            "germany",
+            "france",
+            "australia",
+            "singapore",
+            "spain",
+            "italy",
+            "brazil",
+            "mexico",
+            "russia",
+            "netherlands",
+            "sweden",
+            "switzerland",
+            "belgium",
+            "norway",
+            "denmark",
+            "finland",
+            "ireland",
+            "austria",
+            "new zealand",
+            "south africa",
+            "korea",
         ]
         detected_unsupported = None
         for uc in unsupported_countries:
-            if _re.search(r'\b' + _re.escape(uc) + r'\b', last_msg_lower):
+            if _re.search(r"\b" + _re.escape(uc) + r"\b", last_msg_lower):
                 has_supported = False
-                for sc, keywords in supported_map.items():
+                for _sc, keywords in supported_map.items():
                     for kw in keywords:
-                        if _re.search(r'\b' + _re.escape(kw) + r'\b', last_msg_lower):
+                        if _re.search(r"\b" + _re.escape(kw) + r"\b", last_msg_lower):
                             has_supported = True
                             break
                     if has_supported:
@@ -242,20 +290,19 @@ def agent_node(state: AgentState) -> AgentState:
                     detected_unsupported = uc.title()
                     break
         if detected_unsupported:
-            logger.info("Programmatically rejecting unsupported country", extra={
-                "event": "country_rejected",
-                "country": detected_unsupported
-            })
+            logger.info(
+                "Programmatically rejecting unsupported country",
+                extra={"event": "country_rejected", "country": detected_unsupported},
+            )
             response.tool_calls = []
             response.content = f"We only support ordering, customer registration, and checking product catalogs for UAE, Japan, US, UK, and India. Unfortunately, {detected_unsupported} is not supported."
             return {
                 "messages": [response] + messages_to_remove,
                 "intent": new_intent,
                 "order_id": new_order_id,
-                "react_iterations": react_iterations
+                "react_iterations": react_iterations,
             }
 
-    
     # ═══ GUARDRAIL A: Extract the CURRENT customer's name from the latest introduction ═══
     # This prevents the LLM from using a stale name (e.g. "Chan") when "Mumtaj" just introduced herself.
     current_customer_name = None
@@ -269,7 +316,7 @@ def agent_node(state: AgentState) -> AgentState:
                 if name:
                     current_customer_name = name
                     break
-    
+
     # Programmatic Guardrails for First-Turn Country and Customer Lookup
     if response.tool_calls:
         # 0. Guard against location lookups!
@@ -282,13 +329,16 @@ def agent_node(state: AgentState) -> AgentState:
                 if tc["name"] == "lookup_customer_orders":
                     called_name = tc.get("args", {}).get("customer_name", "").strip()
                     if called_name.lower() != current_customer_name.lower():
-                        logger.warning("Correcting stale customer name in lookup", extra={
-                            "event": "stale_name_corrected",
-                            "stale_name": called_name,
-                            "correct_name": current_customer_name
-                        })
+                        logger.warning(
+                            "Correcting stale customer name in lookup",
+                            extra={
+                                "event": "stale_name_corrected",
+                                "stale_name": called_name,
+                                "correct_name": current_customer_name,
+                            },
+                        )
                         tc["args"]["customer_name"] = current_customer_name
-        
+
         # ═══ GUARDRAIL C: Deduplicate tool calls already executed in this turn ═══
         # Prevents the same tool+args from firing repeatedly (e.g. lookup_customer_orders("Chan") x50)
         already_executed = set()
@@ -302,21 +352,20 @@ def agent_node(state: AgentState) -> AgentState:
                 for tc in m.tool_calls:
                     key = f"{tc['name']}:{json.dumps(tc.get('args', {}), sort_keys=True)}"
                     already_executed.add(key)
-        
+
         if already_executed:
             deduped_tool_calls = []
             for tc in response.tool_calls:
                 key = f"{tc['name']}:{json.dumps(tc.get('args', {}), sort_keys=True)}"
                 if key in already_executed:
-                    logger.info("Stripping duplicate tool call", extra={
-                        "event": "tool_call_deduped",
-                        "tool": tc["name"],
-                        "tool_args": tc.get("args", {})
-                    })
+                    logger.info(
+                        "Stripping duplicate tool call",
+                        extra={"event": "tool_call_deduped", "tool": tc["name"], "tool_args": tc.get("args", {})},
+                    )
                 else:
                     deduped_tool_calls.append(tc)
             response.tool_calls = deduped_tool_calls
-        
+
         for tc in list(response.tool_calls):
             if tc["name"] == "lookup_customer_orders":
                 customer_name = tc.get("args", {}).get("customer_name", "").strip().lower()
@@ -327,23 +376,26 @@ def agent_node(state: AgentState) -> AgentState:
                     is_location = True
                 elif any(c in customer_name for c in countries):
                     is_location = True
-                
+
                 if is_location:
                     response.tool_calls.remove(tc)
-                    
+
                     # Extract the query/product they wanted from the conversation history
                     query = None
                     for m in reversed(state["messages"]):
                         if isinstance(m, HumanMessage):
                             content_lower = m.content.lower()
                             if "buy" in content_lower or "purchase" in content_lower or "order" in content_lower:
-                                match = _re.search(r'(?:buy|purchase|order|want|get)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\.|$)', content_lower)
+                                match = _re.search(
+                                    r"(?:buy|purchase|order|want|get)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\.|$)",
+                                    content_lower,
+                                )
                                 if match:
                                     query = match.group(1).strip()
                                     break
-                    
+
                     # Extract the country
-                    country = "Japan" # default fallback
+                    country = "Japan"  # default fallback
                     for c in countries:
                         if c in customer_name or (isinstance(last_msg, HumanMessage) and c in last_msg.content.lower()):
                             country = c.title()
@@ -354,18 +406,20 @@ def agent_node(state: AgentState) -> AgentState:
                         country = "UK"
                     elif country == "Usa":
                         country = "USA"
-                    
+
                     if query:
                         # Inject product search tool call
-                        response.tool_calls.append({
-                            "name": "search_retailer_platform",
-                            "args": {"platform": "amazon", "query": query, "country": country},
-                            "id": tc["id"], # reuse tool call ID to keep graph happy
-                            "type": "tool_call"
-                        })
+                        response.tool_calls.append(
+                            {
+                                "name": "search_retailer_platform",
+                                "args": {"platform": "amazon", "query": query, "country": country},
+                                "id": tc["id"],  # reuse tool call ID to keep graph happy
+                                "type": "tool_call",
+                            }
+                        )
                     else:
                         response.content = f"Thank you for letting me know you are from {country}. How can I assist you with your e-commerce needs today?"
-        
+
         # 1. Check if the user is introducing themselves in the last message
         is_introduction = False
         if isinstance(last_msg, HumanMessage):
@@ -376,12 +430,12 @@ def agent_node(state: AgentState) -> AgentState:
                 # Exclude location statements like "I am in Japan" or "I am from India"
                 if not any(loc in content_lower for loc in ["in ", "from "]):
                     is_introduction = True
-                
+
         # 2. Check if a country is explicitly provided in the last message
         has_country_in_last_msg = False
         if isinstance(last_msg, HumanMessage):
             content_lower = last_msg.content.lower()
-            if any(_re.search(r'\b' + _re.escape(c) + r'\b', content_lower) for c in countries):
+            if any(_re.search(r"\b" + _re.escape(c) + r"\b", content_lower) for c in countries):
                 has_country_in_last_msg = True
 
         # If it is an introduction turn, we STRICTLY forbid parallel search tool calls before lookup runs
@@ -401,7 +455,9 @@ def agent_node(state: AgentState) -> AgentState:
             if not lookup_already_done:
                 # Strip any premature search calls and ensure lookup is queued.
                 original_tool_calls = list(response.tool_calls)
-                filtered_tool_calls = [tc for tc in response.tool_calls if tc["name"] not in ["search_catalog", "search_retailer_platform"]]
+                filtered_tool_calls = [
+                    tc for tc in response.tool_calls if tc["name"] not in ["search_catalog", "search_retailer_platform"]
+                ]
 
                 has_lookup = any(tc["name"] == "lookup_customer_orders" for tc in filtered_tool_calls)
                 if not has_lookup:
@@ -409,21 +465,26 @@ def agent_node(state: AgentState) -> AgentState:
                     if not intro_name:
                         intro_name = extract_customer_name(last_msg.content)
                     if intro_name:
-                        filtered_tool_calls.append({
-                            "name": "lookup_customer_orders",
-                            "args": {"customer_name": intro_name},
-                            "id": f"call_{uuid.uuid4().hex[:12]}",
-                            "type": "tool_call"
-                        })
+                        filtered_tool_calls.append(
+                            {
+                                "name": "lookup_customer_orders",
+                                "args": {"customer_name": intro_name},
+                                "id": f"call_{uuid.uuid4().hex[:12]}",
+                                "type": "tool_call",
+                            }
+                        )
                 response.tool_calls = filtered_tool_calls
 
         # Unified Guardrail: Check search tool calls for missing country
         has_search = any(tc["name"] in ["search_catalog", "search_retailer_platform"] for tc in response.tool_calls)
-        logger.info("Unified country guardrail status", extra={
-            "has_search": has_search,
-            "has_country_in_last_msg": has_country_in_last_msg,
-            "last_msg": last_msg.content if last_msg else None
-        })
+        logger.info(
+            "Unified country guardrail status",
+            extra={
+                "has_search": has_search,
+                "has_country_in_last_msg": has_country_in_last_msg,
+                "last_msg": last_msg.content if last_msg else None,
+            },
+        )
         if has_search:
             profile_country = None
             # Check if a previous successful customer lookup established the country
@@ -445,8 +506,10 @@ def agent_node(state: AgentState) -> AgentState:
             elif not has_country_in_last_msg:
                 # Strip all search tool calls and ask for the country directly if no profile and no msg country
                 original_tool_calls = list(response.tool_calls)
-                response.tool_calls = [tc for tc in response.tool_calls if tc["name"] not in ["search_catalog", "search_retailer_platform"]]
-                
+                response.tool_calls = [
+                    tc for tc in response.tool_calls if tc["name"] not in ["search_catalog", "search_retailer_platform"]
+                ]
+
                 if not response.tool_calls:
                     original_query = "the items you are looking for"
                     for tc in original_tool_calls:
@@ -454,17 +517,16 @@ def agent_node(state: AgentState) -> AgentState:
                             original_query = tc["args"]["query"]
                             break
                     response.content = f"It looks like you're a new customer. Could you please let me know which country you are in so I can check the local catalogs for the {original_query}?"
-    
+
     # ── Strict Unregistered Customer Checkout Guardrail ──
     # If the user selected a product via Checkout ('I choose the ... option: "..." at price "..."')
     # and we do NOT have a registered email in the history, and they have not provided an email in the last message,
     # then we MUST ask for their email address and strip any tool calls.
     last_human_content = last_msg.content if isinstance(last_msg, HumanMessage) else ""
-    is_checkout_message = bool(_re.search(
-        r'I choose the \w+\s+option:\s*"([^"]+)"\s+at price\s*"([^"]+)"',
-        last_human_content, _re.IGNORECASE
-    ))
-    
+    is_checkout_message = bool(
+        _re.search(r'I choose the \w+\s+option:\s*"([^"]+)"\s+at price\s*"([^"]+)"', last_human_content, _re.IGNORECASE)
+    )
+
     if is_checkout_message:
         # Search history for a registered customer's email
         has_registered = False
@@ -475,14 +537,17 @@ def agent_node(state: AgentState) -> AgentState:
                 except Exception:
                     try:
                         import ast as _ast
+
                         tool_data = _ast.literal_eval(m.content) if isinstance(m.content, str) else {}
                     except Exception:
                         tool_data = {}
                 customer_data = tool_data.get("customer", tool_data) if isinstance(tool_data, dict) else {}
-                if (isinstance(tool_data, dict) and 
-                        customer_data.get("email") and 
-                        "not found" not in str(tool_data).lower() and
-                        "not_found" not in str(tool_data).lower()):
+                if (
+                    isinstance(tool_data, dict)
+                    and customer_data.get("email")
+                    and "not found" not in str(tool_data).lower()
+                    and "not_found" not in str(tool_data).lower()
+                ):
                     has_registered = True
                     break
                 if isinstance(m.content, str):
@@ -490,13 +555,14 @@ def agent_node(state: AgentState) -> AgentState:
                     if email_match and "not found" not in m.content.lower() and "not_found" not in m.content.lower():
                         has_registered = True
                         break
-        
+
         has_email_in_last_msg = "@" in last_human_content
-        
+
         if not has_registered and not has_email_in_last_msg:
-            logger.info("Unregistered customer checkout: prompting for name and email address", extra={
-                "event": "unregistered_checkout_prompt"
-            })
+            logger.info(
+                "Unregistered customer checkout: prompting for name and email address",
+                extra={"event": "unregistered_checkout_prompt"},
+            )
             # Strip all tool calls and ask for email and name
             response.tool_calls = []
             response.content = "Could you please provide your full name and email address so I can register your account and place your order?"
@@ -506,15 +572,18 @@ def agent_node(state: AgentState) -> AgentState:
     # customer is registered (found in a previous lookup_customer_orders ToolMessage),
     # AND the user's last message contains a product selection — inject create_new_order directly.
     EMAIL_ASK_PATTERNS = [
-        "email address", "provide your email", "your email", 
-        "register your account", "register your email"
+        "email address",
+        "provide your email",
+        "your email",
+        "register your account",
+        "register your email",
     ]
     is_asking_for_email = (
-        not response.tool_calls and
-        bool(response.content) and
-        any(p in response.content.lower() for p in EMAIL_ASK_PATTERNS)
+        not response.tool_calls
+        and bool(response.content)
+        and any(p in response.content.lower() for p in EMAIL_ASK_PATTERNS)
     )
-    
+
     if is_asking_for_email:
         # Search history for a registered customer's email
         registered_email = None
@@ -527,6 +596,7 @@ def agent_node(state: AgentState) -> AgentState:
                     # Fallback: handle Python str(dict) format which uses single quotes (not valid JSON)
                     try:
                         import ast as _ast
+
                         tool_data = _ast.literal_eval(m.content) if isinstance(m.content, str) else {}
                     except Exception:
                         tool_data = {}
@@ -534,10 +604,12 @@ def agent_node(state: AgentState) -> AgentState:
                 # get_customer_orders() returns {"customer": {"email": ...}, "orders": [...]}
                 customer_data = tool_data.get("customer", tool_data) if isinstance(tool_data, dict) else {}
                 # A valid registered customer lookup contains 'email' and NOT 'not_found'
-                if (isinstance(tool_data, dict) and 
-                        customer_data.get("email") and 
-                        "not found" not in str(tool_data).lower() and
-                        "not_found" not in str(tool_data).lower()):
+                if (
+                    isinstance(tool_data, dict)
+                    and customer_data.get("email")
+                    and "not found" not in str(tool_data).lower()
+                    and "not_found" not in str(tool_data).lower()
+                ):
                     registered_email = customer_data["email"]
                     registered_name = customer_data.get("name", current_customer_name or "Customer")
                     break
@@ -547,21 +619,22 @@ def agent_node(state: AgentState) -> AgentState:
                     name_match_t = _re.search(r'["\']name["\']\s*:\s*["\']([^"\']+)["\']', m.content)
                     if email_match and "not found" not in m.content.lower() and "not_found" not in m.content.lower():
                         registered_email = email_match.group(1)
-                        registered_name = name_match_t.group(1) if name_match_t else (current_customer_name or "Customer")
+                        registered_name = (
+                            name_match_t.group(1) if name_match_t else (current_customer_name or "Customer")
+                        )
                         break
-        
+
         if registered_email:
             # Parse product selection from the last HumanMessage
             # Format: 'I choose the PLATFORM option: "PRODUCT NAME" at price "PRICE"'
             last_human_content = last_msg.content if isinstance(last_msg, HumanMessage) else ""
             selection_match = _re.search(
-                r'I choose the \w+\s+option:\s*"([^"]+)"\s+at price\s*"([^"]+)"',
-                last_human_content, _re.IGNORECASE
+                r'I choose the \w+\s+option:\s*"([^"]+)"\s+at price\s*"([^"]+)"', last_human_content, _re.IGNORECASE
             )
             if selection_match:
                 product_name = selection_match.group(1).strip()
                 price_str = selection_match.group(2).strip()
-                
+
                 # Detect currency from the price string
                 if "￥" in price_str:
                     currency_code = "JPY"
@@ -577,54 +650,60 @@ def agent_node(state: AgentState) -> AgentState:
                     currency_code = "AED"
                 else:
                     currency_code = "INR"
-                
+
                 # Strip currency symbols to get numeric price
-                price_numeric = _re.sub(r'[^\d,\.]', '', price_str).replace(',', '')
+                price_numeric = _re.sub(r"[^\d,\.]", "", price_str).replace(",", "")
                 if not price_numeric:
                     price_numeric = "0"
-                
-                logger.info("GUARDRAIL D: Injecting create_new_order for registered customer", extra={
-                    "event": "registered_customer_bypass",
-                    "email": registered_email,
-                    "product": product_name,
-                    "price": price_numeric,
-                    "currency": currency_code
-                })
-                
+
+                logger.info(
+                    "GUARDRAIL D: Injecting create_new_order for registered customer",
+                    extra={
+                        "event": "registered_customer_bypass",
+                        "email": registered_email,
+                        "product": product_name,
+                        "price": price_numeric,
+                        "currency": currency_code,
+                    },
+                )
+
                 # Inject the create_new_order tool call, clear the email-asking text
                 response.content = ""
-                response.tool_calls = [{
-                    "name": "create_new_order",
-                    "args": {
-                        "customer_name": registered_name,
-                        "item": product_name,
-                        "customer_email": registered_email,
-                        "price": price_numeric,
-                        "currency": currency_code
-                    },
-                    "id": f"call_{uuid.uuid4().hex[:12]}",
-                    "type": "tool_call"
-                }]
-    
-    logger.info("Agent node response details", extra={
-        "tool_calls": response.tool_calls,
-        "content_len": len(response.content) if response.content else 0
-    })
+                response.tool_calls = [
+                    {
+                        "name": "create_new_order",
+                        "args": {
+                            "customer_name": registered_name,
+                            "item": product_name,
+                            "customer_email": registered_email,
+                            "price": price_numeric,
+                            "currency": currency_code,
+                        },
+                        "id": f"call_{uuid.uuid4().hex[:12]}",
+                        "type": "tool_call",
+                    }
+                ]
+
+    logger.info(
+        "Agent node response details",
+        extra={"tool_calls": response.tool_calls, "content_len": len(response.content) if response.content else 0},
+    )
 
     # Return the AI response, removal instructions, and reset state
     return {
         "messages": [response] + messages_to_remove,
         "intent": new_intent,
         "order_id": new_order_id,
-        "react_iterations": react_iterations
+        "react_iterations": react_iterations,
     }
 
 
 def tool_node(state: AgentState) -> AgentState:
     """Execute tool calls from the agent's last response, with Redis caching and parallel execution."""
-    from cache.redis_cache import get_cached_tool_result, set_cached_tool_result
     import time
     from concurrent.futures import ThreadPoolExecutor
+
+    from cache.redis_cache import get_cached_tool_result, set_cached_tool_result
 
     last_message = state["messages"][-1]
     tool_map = {t.name: t for t in AGENT_TOOLS}
@@ -644,10 +723,15 @@ def tool_node(state: AgentState) -> AgentState:
             if cached:
                 result = cached
                 duration_ms = round((time.time() - start) * 1000)
-                logger.info("Tool executed (cached)", extra={
-                    "event": "tool_cached", "tool": tool_name,
-                    "tool_args": tool_args, "duration_ms": duration_ms
-                })
+                logger.info(
+                    "Tool executed (cached)",
+                    extra={
+                        "event": "tool_cached",
+                        "tool": tool_name,
+                        "tool_args": tool_args,
+                        "duration_ms": duration_ms,
+                    },
+                )
             else:
                 tool_fn = tool_map.get(tool_name)
                 if tool_fn:
@@ -658,17 +742,23 @@ def tool_node(state: AgentState) -> AgentState:
                 else:
                     result = f"Tool {tool_name} not found."
                 duration_ms = round((time.time() - start) * 1000)
-                logger.info("Tool executed (live)", extra={
-                    "event": "tool_live", "tool": tool_name,
-                    "tool_args": tool_args, "duration_ms": duration_ms
-                })
+                logger.info(
+                    "Tool executed (live)",
+                    extra={"event": "tool_live", "tool": tool_name, "tool_args": tool_args, "duration_ms": duration_ms},
+                )
         except Exception as e:
             result = f"Error executing tool '{tool_name}': {str(e)}"
             duration_ms = round((time.time() - start) * 1000)
-            logger.error("Tool execution failed", extra={
-                "event": "tool_error", "tool": tool_name,
-                "tool_args": tool_args, "error": str(e), "duration_ms": duration_ms
-            })
+            logger.error(
+                "Tool execution failed",
+                extra={
+                    "event": "tool_error",
+                    "tool": tool_name,
+                    "tool_args": tool_args,
+                    "error": str(e),
+                    "duration_ms": duration_ms,
+                },
+            )
 
         return ToolMessage(content=str(result), tool_call_id=tool_call["id"]), tool_name, tool_args
 
@@ -696,7 +786,7 @@ def escalation_check(state: AgentState) -> AgentState:
         return state
 
     last_message = human_messages[-1].content.lower()
-    
+
     # Standard anger keywords
     anger_words = ["angry", "furious", "terrible", "worst", "useless", "refund now", "escalate"]
 
@@ -713,22 +803,26 @@ def escalation_check(state: AgentState) -> AgentState:
             if isinstance(m, HumanMessage) and m == human_messages[-1]:
                 human_idx = i
                 break
-        
+
         if human_idx > 0:
             for m in reversed(state["messages"][:human_idx]):
                 if isinstance(m, AIMessage) and m.content:
                     last_ai = m.content.lower()
-                    if "reason for cancel" in last_ai or "reason for request" in last_ai or "reason for the cancellation" in last_ai:
+                    if (
+                        "reason for cancel" in last_ai
+                        or "reason for request" in last_ai
+                        or "reason for the cancellation" in last_ai
+                    ):
                         is_cancelling = True
                     break
-                
+
         has_anger = any(word in last_message for word in anger_words)
         if has_anger:
             if "cancel" in last_message or is_cancelling:
                 pass  # DO NOT escalate! Let the agent handle cancellation.
             else:
                 anger_count += 1
-                
+
         if anger_count >= 2 or retry_count >= 3 or refund_amount > 5000:
             state["escalated"] = True
 
@@ -738,10 +832,10 @@ def escalation_check(state: AgentState) -> AgentState:
     return state
 
 
-
 def escalate(state: AgentState) -> AgentState:
     """Escalate to a human agent by creating a support ticket."""
     import re as _re
+
     messages = state.get("messages", [])
     already_escalated = any("TKT-" in m.content for m in messages if isinstance(m, AIMessage))
 
@@ -750,7 +844,7 @@ def escalate(state: AgentState) -> AgentState:
     else:
         ticket_id = f"TKT-{uuid.uuid4().hex[:6].upper()}"
         order_id = state.get("order_id")
-        
+
         # Scan conversation history in REVERSE order for most recent order ID and customer name if not in state
         customer_name = None
         for m in reversed(messages):
@@ -762,13 +856,13 @@ def escalate(state: AgentState) -> AgentState:
                         order_id = str(tc_args["order_id"]).upper()
                     if not customer_name and "customer_name" in tc_args:
                         customer_name = tc_args["customer_name"]
-            
+
             if isinstance(m, HumanMessage):
                 # Extract order IDs like ORD001, ORD 001, ORD1234
                 if not order_id:
-                    order_match = _re.search(r'\b(ORD\s*\d{3,10})\b', m.content, _re.IGNORECASE)
+                    order_match = _re.search(r"\b(ORD\s*\d{3,10})\b", m.content, _re.IGNORECASE)
                     if order_match:
-                        order_id = _re.sub(r'\s+', '', order_match.group(1)).upper()
+                        order_id = _re.sub(r"\s+", "", order_match.group(1)).upper()
                 # Extract customer name from "I am X" or "my name is X" patterns
                 if not customer_name:
                     extracted = extract_customer_name(m.content)
@@ -777,15 +871,18 @@ def escalate(state: AgentState) -> AgentState:
             elif isinstance(m, ToolMessage):
                 # Extract customer info from tool responses
                 if not order_id:
-                    order_match = _re.search(r'\b(ORD\s*\d{3,10})\b', m.content, _re.IGNORECASE)
+                    order_match = _re.search(r"\b(ORD\s*\d{3,10})\b", m.content, _re.IGNORECASE)
                     if order_match:
-                        order_id = _re.sub(r'\s+', '', order_match.group(1)).upper()
-        
+                        order_id = _re.sub(r"\s+", "", order_match.group(1)).upper()
+
         # Summarize the conversation to provide context for the human agent
-        history_lines = [f"{'User' if isinstance(m, HumanMessage) else 'Agent'}: {m.content}" 
-                         for m in messages[-4:] if isinstance(m, (HumanMessage, AIMessage))]
+        history_lines = [
+            f"{'User' if isinstance(m, HumanMessage) else 'Agent'}: {m.content}"
+            for m in messages[-4:]
+            if isinstance(m, (HumanMessage, AIMessage))
+        ]
         history = "\n".join(history_lines)
-        
+
         result = create_support_ticket(ticket_id, order_id, "Automated Escalation", history, customer_name)
         # Use the actual ticket ID from result (handles duplicate case where existing ticket was found)
         actual_ticket_id = result.get("ticket_id", ticket_id)

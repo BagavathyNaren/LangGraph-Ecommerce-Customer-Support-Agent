@@ -1,9 +1,10 @@
 import json
-from tools.db import get_connection
+
 from logger import get_logger
-import threading
+from tools.db import get_connection
 
 logger = get_logger("analytics")
+
 
 def init_analytics_db():
     """Ensure the analytics table exists."""
@@ -27,15 +28,21 @@ def init_analytics_db():
     except Exception as e:
         logger.error("Failed to initialize analytics DB", extra={"event": "analytics_init_error", "error": str(e)})
 
-def log_event(event_type: str, thread_id: str = None, intent: str = None, metadata: dict = None, duration_ms: int = None):
+
+def log_event(
+    event_type: str, thread_id: str = None, intent: str = None, metadata: dict = None, duration_ms: int = None
+):
     """Log an analytics event synchronously (intended to be called via BackgroundTasks)."""
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO analytics_events (event_type, thread_id, intent, metadata, duration_ms)
                     VALUES (%s, %s, %s, %s, %s)
-                """, (event_type, thread_id, intent, json.dumps(metadata or {}), duration_ms))
+                """,
+                    (event_type, thread_id, intent, json.dumps(metadata or {}), duration_ms),
+                )
             conn.commit()
             logger.info(f"Logged event: {event_type}")
     except Exception as e:
