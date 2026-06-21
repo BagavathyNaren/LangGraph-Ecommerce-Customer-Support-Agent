@@ -35,6 +35,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -86,5 +88,5 @@ jobs:
           git config --global user.email 'actions@github.com'
           git add test_output.log
           git commit -m "ci: commit test_output.log for inspection"
-          git push origin HEAD:refs/heads/ci-validation-workflow
+          git push
 
