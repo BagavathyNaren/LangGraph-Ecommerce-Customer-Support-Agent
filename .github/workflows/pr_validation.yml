@@ -78,13 +78,11 @@ jobs:
           TAVILY_API_KEY: "tvly-dummy-key"
           SERPER_API_KEY: "serper-dummy-key"
         run: |
-          python -m pytest tests/test_nodes.py tests/test_real_tools.py -v --tb=long > test_output.log 2>&1
-          cat test_output.log
-          exit 1 # force failure to trigger next step
+          python -m pytest tests/test_nodes.py tests/test_real_tools.py -v --tb=short
 
       - name: Comment PR with test output
         uses: actions/github-script@v6
-        if: always()
+        if: failure()
         with:
           script: |
             const fs = require('fs');
