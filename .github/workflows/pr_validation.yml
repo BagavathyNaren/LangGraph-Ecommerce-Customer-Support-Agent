@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lint-and-format:
@@ -75,13 +75,16 @@ jobs:
           TAVILY_API_KEY: "tvly-dummy-key"
           SERPER_API_KEY: "serper-dummy-key"
         run: |
-          python -m pytest tests/test_nodes.py tests/test_real_tools.py -v --tb=long 2>&1 | tee test_output.log
-          exit ${PIPESTATUS[0]}
+          python -m pytest tests/test_nodes.py tests/test_real_tools.py -v --tb=long > test_output.log 2>&1
+          cat test_output.log
+          exit 1 # force failure to trigger next step
 
-      - name: Upload test output on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-output
-          path: test_output.log
+      - name: Commit test output
+        if: always()
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add test_output.log
+          git commit -m "ci: commit test_output.log for inspection"
+          git push
 
