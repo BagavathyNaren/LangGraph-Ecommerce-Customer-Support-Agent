@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   lint-and-format:
@@ -81,12 +82,21 @@ jobs:
           cat test_output.log
           exit 1 # force failure to trigger next step
 
-      - name: Commit test output
+      - name: Comment PR with test output
+        uses: actions/github-script@v6
         if: always()
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git add test_output.log
-          git commit -m "ci: commit test_output.log for inspection"
-          git push
+        with:
+          script: |
+            const fs = require('fs');
+            let log = 'No log found';
+            if (fs.existsSync('test_output.log')) {
+                log = fs.readFileSync('test_output.log', 'utf8');
+                if (log.length > 60000) { log = log.substring(log.length - 60000); }
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '### Ubuntu Test Failure Log\n```text\n' + log + '\n```'
+            })
 
