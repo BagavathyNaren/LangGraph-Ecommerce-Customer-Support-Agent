@@ -1,15 +1,33 @@
-import logging
 import json
+import logging
 import sys
 from datetime import datetime, timezone
 
 STANDARD_FIELDS = {
-    "name", "msg", "args", "levelname", "levelno", "pathname",
-    "filename", "module", "exc_info", "exc_text", "stack_info",
-    "lineno", "funcName", "created", "msecs", "relativeCreated",
-    "thread", "threadName", "processName", "process", "message",
-    "taskName"
+    "name",
+    "msg",
+    "args",
+    "levelname",
+    "levelno",
+    "pathname",
+    "filename",
+    "module",
+    "exc_info",
+    "exc_text",
+    "stack_info",
+    "lineno",
+    "funcName",
+    "created",
+    "msecs",
+    "relativeCreated",
+    "thread",
+    "threadName",
+    "processName",
+    "process",
+    "message",
+    "taskName",
 }
+
 
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -17,7 +35,7 @@ class JSONFormatter(logging.Formatter):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "severity": record.levelname,
-            "logging.googleapis.com/severity": record.levelname, # Native GCP Structured Logging mapping
+            "logging.googleapis.com/severity": record.levelname,  # Native GCP Structured Logging mapping
             "logger": record.name,
             "message": record.getMessage(),
         }
@@ -28,6 +46,7 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info:
             log_entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_entry)
+
 
 def get_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)

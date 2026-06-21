@@ -1,5 +1,6 @@
-import psycopg
 import os
+
+import psycopg
 
 # Uses GCP Postgres (e2-micro) connection string from environment variable
 db_url = os.environ.get("DATABASE_URL", "postgresql://postgres:my-agentic-lab@35.209.170.21:5432/postgres")
