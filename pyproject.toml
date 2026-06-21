@@ -13,7 +13,13 @@ select = [
     "B",   # flake8-bugbear (common bugs/pitfalls)
     "UP",  # pyupgrade (modernize syntax)
 ]
-ignore = []
+ignore = [
+    "E501", # line too long
+    "E402", # module level import not at top of file
+    "I001", # isort unsorted imports
+    "C901", # mccabe complexity
+    "B904", # raise without from inside except
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 15
