@@ -1,10 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('Refund and Return Workflows', () => {
+  const targetUrl = process.env.PLAYWRIGHT_TEST_URL || 'https://my-agentic-lab.web.app';
+
   test('E2E Refund Flow - Success', async ({ page }) => {
     // We assume the app is running locally on port 5173 or similar.
     // The test will simply mock or assume a chat flow.
-    await page.goto('http://localhost:5173');
+    await page.goto(targetUrl);
 
     // Wait for chat to be ready
     await page.waitForSelector('input[placeholder="Type a message..."]', { timeout: 10000 });
@@ -18,7 +20,7 @@ test.describe('Refund and Return Workflows', () => {
   });
 
   test('E2E Return Flow - Success', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto(targetUrl);
     await page.waitForSelector('input[placeholder="Type a message..."]', { timeout: 10000 });
 
     // Send return query
