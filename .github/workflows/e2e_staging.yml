@@ -34,12 +34,7 @@ jobs:
           npx playwright install --with-deps
 
       - name: Run Playwright tests
-        run: |
-          cd frontend
-          npx vite preview --port 4173 &
-          sleep 5
-          cd ..
-          npx playwright test
+        run: npx playwright test
         env:
           PLAYWRIGHT_TEST_URL: 'http://localhost:4173'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
