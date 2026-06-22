@@ -32,15 +32,15 @@ test.describe('E-Commerce Customer Support Agent E2E Suite', () => {
     
     if (await themeToggle.count() > 0) {
       // Get initial theme attribute/class if applicable
-      const htmlElement = page.locator('html');
-      const initialClass = await htmlElement.getAttribute('class') || '';
+      const mainContainer = page.locator('.min-h-screen').first();
+      const initialClass = await mainContainer.getAttribute('class') || '';
 
       // Toggle theme
       await themeToggle.first().click();
       await page.waitForTimeout(500);
 
       // Verify class changes or exists
-      const currentClass = await htmlElement.getAttribute('class') || '';
+      const currentClass = await mainContainer.getAttribute('class') || '';
       expect(currentClass).not.toBe(initialClass);
     }
   });

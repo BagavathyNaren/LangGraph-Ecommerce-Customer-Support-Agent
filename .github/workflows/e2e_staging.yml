@@ -28,9 +28,6 @@ jobs:
           cd frontend
           npm run build
 
-      - name: Deploy Frontend to Firebase Staging
-        run: npx firebase-tools deploy --only hosting --project my-agentic-lab --token ${{ secrets.FIREBASE_TOKEN }}
-
       - name: Install Playwright and dependencies
         run: |
           npm install @playwright/test
@@ -39,7 +36,7 @@ jobs:
       - name: Run Playwright tests
         run: npx playwright test
         env:
-          PLAYWRIGHT_TEST_URL: 'https://my-agentic-lab.web.app'
+          PLAYWRIGHT_TEST_URL: 'http://localhost:4173'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Upload Playwright report
