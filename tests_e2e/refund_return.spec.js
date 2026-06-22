@@ -9,11 +9,11 @@ test.describe('Refund and Return Workflows', () => {
     await page.goto(targetUrl);
 
     // Wait for chat to be ready
-    await page.waitForSelector('input[placeholder="Type a message..."]', { timeout: 10000 });
+    await page.waitForSelector('input[placeholder*="Ask"], textarea[placeholder*="Ask"]', { timeout: 10000 });
 
     // Send refund query
-    await page.fill('input[placeholder="Type a message..."]', 'What is the refund status of my order ORD001?');
-    await page.press('input[placeholder="Type a message..."]', 'Enter');
+    await page.fill('input[placeholder*="Ask"], textarea[placeholder*="Ask"]', 'What is the refund status of my order ORD001?');
+    await page.press('input[placeholder*="Ask"], textarea[placeholder*="Ask"]', 'Enter');
 
     // Expect bot to reply with refund details (we wait for a response that mentions refund)
     await expect(page.locator('.message.bot').last()).toContainText(/refund/i, { timeout: 20000 });
@@ -21,11 +21,11 @@ test.describe('Refund and Return Workflows', () => {
 
   test('E2E Return Flow - Success', async ({ page }) => {
     await page.goto(targetUrl);
-    await page.waitForSelector('input[placeholder="Type a message..."]', { timeout: 10000 });
+    await page.waitForSelector('input[placeholder*="Ask"], textarea[placeholder*="Ask"]', { timeout: 10000 });
 
     // Send return query
-    await page.fill('input[placeholder="Type a message..."]', 'I want to return my order ORD002.');
-    await page.press('input[placeholder="Type a message..."]', 'Enter');
+    await page.fill('input[placeholder*="Ask"], textarea[placeholder*="Ask"]', 'I want to return my order ORD002.');
+    await page.press('input[placeholder*="Ask"], textarea[placeholder*="Ask"]', 'Enter');
 
     // Expect bot to reply regarding return initiation or status
     await expect(page.locator('.message.bot').last()).toContainText(/return|policy/i, { timeout: 20000 });
