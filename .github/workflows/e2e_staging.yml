@@ -18,15 +18,30 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm run build
+
       - name: Install Playwright and dependencies
         run: |
           npm install @playwright/test
           npx playwright install --with-deps
 
       - name: Run Playwright tests
-        run: npx playwright test
+        run: |
+          cd frontend
+          npx vite preview --port 4173 &
+          sleep 5
+          cd ..
+          npx playwright test
         env:
-          PLAYWRIGHT_TEST_URL: 'https://my-agentic-lab.web.app'
+          PLAYWRIGHT_TEST_URL: 'http://localhost:4173'
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Upload Playwright report
