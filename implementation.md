@@ -26,7 +26,7 @@ This plan implements Phase 5 one step at a time, per the approved workflow rules
 ---
 
 ## Step 2: Fix Ruff Violations (Auto-fixable)
-**Status**: `[ ]` PENDING
+**Status**: `[x]` DONE
 
 **What**: Run `ruff check --fix .` and `ruff format .` to auto-fix the 498 auto-fixable violations (trailing whitespace, import sorting, blank line whitespace). Then manually fix remaining line-length violations.
 
@@ -40,7 +40,7 @@ This plan implements Phase 5 one step at a time, per the approved workflow rules
 ---
 
 ## Step 3: E2E Staging Pipeline
-**Status**: `[ ]` PENDING
+**Status**: `[x]` DONE
 
 **What**: Create a GitHub Actions workflow that runs the Playwright E2E suite against the staging environment before allowing merges to `main`.
 
@@ -50,7 +50,7 @@ This plan implements Phase 5 one step at a time, per the approved workflow rules
 ---
 
 ## Step 4: Frontend Auto-Deployment
-**Status**: `[ ]` PENDING
+**Status**: `[/]` IN PROGRESS
 
 **What**: Configure GitHub Actions to automatically deploy to Firebase Hosting upon a successful merge to `main`.
 
@@ -92,4 +92,4 @@ This plan implements Phase 5 one step at a time, per the approved workflow rules
 
 ## Current Execution Pointer
 
-▶️ **Next Step**: Step 2 (Fix Ruff Violations)
+▶️ **Next Step**: Step 4 (Frontend Auto-Deployment)
