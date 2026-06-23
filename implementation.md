@@ -50,7 +50,7 @@ This plan implements Phase 5 one step at a time, per the approved workflow rules
 ---
 
 ## Step 4: Frontend Auto-Deployment
-**Status**: `[/]` IN PROGRESS
+**Status**: `[x]` DONE
 
 **What**: Configure GitHub Actions to automatically deploy to Firebase Hosting upon a successful merge to `main`.
 
@@ -92,4 +92,4 @@ This plan implements Phase 5 one step at a time, per the approved workflow rules
 
 ## Current Execution Pointer
 
-▶️ **Next Step**: Step 4 (Frontend Auto-Deployment)
+▶️ **Next Step**: Step 5 (Backend Auto-Deployment)
