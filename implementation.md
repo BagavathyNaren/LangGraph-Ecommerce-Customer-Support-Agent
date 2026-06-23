@@ -64,7 +64,7 @@ This plan implements Phase 5 one step at a time, per the approved workflow rules
 ---
 
 ## Step 5: Backend Auto-Deployment
-**Status**: `[ ]` PENDING
+**Status**: `[x]` DONE
 
 **What**: Configure GitHub Actions to build and deploy the container to GCP Cloud Run.
 
@@ -92,4 +92,4 @@ This plan implements Phase 5 one step at a time, per the approved workflow rules
 
 ## Current Execution Pointer
 
-▶️ **Next Step**: Step 5 (Backend Auto-Deployment)
+▶️ **Next Step**: Step 6 (Secure Secret Management)
