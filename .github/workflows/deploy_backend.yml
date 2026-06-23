@@ -31,4 +31,5 @@ jobs:
             --region us-central1 \
             --project my-agentic-lab \
             --memory 4Gi \
+            --max-instances 5 \
             --quiet

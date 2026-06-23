@@ -1,95 +1,73 @@
-# Phase 5: CI/CD Deployment Pipelines — Implementation Plan
+# Phase 6: Production Scaling & Portfolio — Implementation Plan
 
-> **Blueprint Reference**: Phase 5 (📋 PENDING)  
+> **Blueprint Reference**: Phase 6 (📋 PENDING)  
 > **Source of Truth**: [GEMINI.md](GEMINI.md) | [Blueprint.md](Blueprint.md) | [PRODUCTION_ARCHITECTURE.md](PRODUCTION_ARCHITECTURE.md)
 
-This plan implements Phase 5 one step at a time, per the approved workflow rules in `.agents/AGENTS.md`.
+This plan implements Phase 6 one step at a time, per the approved workflow rules in `.agents/AGENTS.md`.
 
 ---
 
-## Step 1: PR Validation Workflow
+## Step 1: Zero-Cost Scaling Limits
 **Status**: `[x]` DONE
 
-**What**: Create a GitHub Actions workflow (`.github/workflows/pr_validation.yml`) that automatically runs `ruff check`, `ruff format --check`, and `pytest` on all pull requests targeting `main`.
-
-**Files to create/modify**:
-- `[NEW]` `.github/workflows/pr_validation.yml`
-
-**Details**:
-- Trigger: `pull_request` targeting `main` branch
-- Python version: `3.12`
-- Jobs:
-  1. `lint-and-format` — Install ruff, run `ruff check .` and `ruff format --check .`
-  2. `test` — Install dependencies from `requirements.txt` + `pytest`, run `pytest tests/`
-- Mocked DB: Tests use `conftest.py` fixtures (no real DB needed in CI)
-
----
-
-## Step 2: Fix Ruff Violations (Auto-fixable)
-**Status**: `[x]` DONE
-
-**What**: Run `ruff check --fix .` and `ruff format .` to auto-fix the 498 auto-fixable violations (trailing whitespace, import sorting, blank line whitespace). Then manually fix remaining line-length violations.
-
+**What**: Optimize the GCP Cloud Run configuration to prevent runaway scaling and avoid incurring charges.
 **Files to modify**:
-- `tools/real_tools.py` (majority of violations)
-- `graph/nodes.py`
-- `main.py`
-- `logger.py`
-- Various other Python files
+- `.github/workflows/deploy_backend.yml`
+**Details**:
+- Add `--max-instances 5` to the `gcloud run deploy` command to enforce a hard cap, ensuring it never scales beyond the Always Free limits.
 
 ---
 
-## Step 3: E2E Staging Pipeline
+## Step 2: Automated Registry Cleanup Verification
 **Status**: `[x]` DONE
 
-**What**: Create a GitHub Actions workflow that runs the Playwright E2E suite against the staging environment before allowing merges to `main`.
-
-**Files to create**:
-- `[NEW]` `.github/workflows/e2e_staging.yml`
+**What**: Verify and solidify the automated Artifact Registry cleanup policies to preserve storage capacity (0.5 GB Free Tier).
+**Files to verify/modify**:
+- `cleanup_policy.json`
+**Details**:
+- Confirm the policy preserves only the 3 most recent images and automatically deletes revisions older than 14 days (GEMINI.md Rule 6).
 
 ---
 
-## Step 4: Frontend Auto-Deployment
+## Step 3: Interactive Demo Mode
 **Status**: `[x]` DONE
 
-**What**: Configure GitHub Actions to automatically deploy to Firebase Hosting upon a successful merge to `main`.
-
-**Files to create**:
-- `[NEW]` `.github/workflows/deploy_frontend.yml`
-
-**Constraints (from GEMINI.md)**:
-- Command: `firebase deploy --only hosting --project my-agentic-lab`
-- Must use `FIREBASE_TOKEN` secret (not service account, to stay zero-cost)
+**What**: Develop a "Demo Mode" toggle in the frontend allowing recruiters or guests to instantly load pre-recorded, flawless scenarios (e.g., the "Chan" flow).
+**Files to modify**:
+- `frontend/src/App.jsx`
+- (And relevant CSS/components)
+**Details**:
+- Add a toggle in the UI.
+- When toggled, pre-fill the chat with the standard Chan scenario for instant demonstration of the ReAct loop without waiting for live LLM responses.
 
 ---
 
-## Step 5: Backend Auto-Deployment
+## Step 4: Premium Repository Documentation
 **Status**: `[x]` DONE
 
-**What**: Configure GitHub Actions to build and deploy the container to GCP Cloud Run.
-
-**Files to create**:
-- `[NEW]` `.github/workflows/deploy_backend.yml`
-
-**Constraints (from GEMINI.md)**:
-- Command: `gcloud run deploy ecommerce-support-agent --source . --region us-central1 --project my-agentic-lab --memory 4Gi`
-- Must enforce `4Gi` memory (GEMINI.md Rule 4)
-- Must NOT overwrite existing env vars (GEMINI.md Rule 5)
+**What**: Write a high-quality `README.md` for the repository portfolio.
+**Files to modify**:
+- `README.md`
+**Details**:
+- Add dynamic architecture mermaid diagrams.
+- Add live badges for CI/CD status (PR Validation, Frontend Deploy, Backend Deploy).
+- Provide setup instructions and link to the live staging URLs (Firebase & Cloud Run).
 
 ---
 
-## Step 6: Secure Secret Management
+## Step 5: Final Zero-Cost Audit
 **Status**: `[x]` DONE
 
-**What**: Document and configure the required GitHub repository secrets for all workflows. (Added `SECRETS.md`)
+**What**: Run a final mathematical and configuration audit against GCP's Always Free tier limitations.
+**Files to modify**:
+- N/A (Produces an audit report artifact)
+**Details**:
+- Verify VM (e2-micro) disk type is Standard, Cloud Run memory is 4Gi, max instances capped at 5, and Artifact Registry policies are active.
 
-**Secrets needed**:
-- `FIREBASE_TOKEN` — for Firebase Hosting deployment
-- `GCP_SA_KEY` — GCP service account JSON for Cloud Run deployment
-- `DATABASE_URL` — for E2E tests against staging DB (if applicable)
+*(Note: "VM Database Connection Pooling with PgBouncer" is skipped or simplified if the e2-micro cannot safely run PgBouncer alongside Postgres without OOMing, per Zero-Cost constraints, or it will be evaluated during the audit).*
 
 ---
 
 ## Current Execution Pointer
 
-▶️ **Next Step**: Phase 5 is COMPLETE. Transitioning to Phase 6 (Production Scaling & Portfolio).
+▶️ **Next Step**: 🎉 Phase 6 is COMPLETE! The project is fully finalized.
