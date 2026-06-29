@@ -31,7 +31,7 @@ test.describe('E-Commerce Customer Support Agent E2E Suite', () => {
     
     if (await themeToggle.count() > 0) {
       // Get initial theme attribute/class if applicable
-      const mainContainer = page.locator('.min-h-screen').first();
+      const mainContainer = page.locator('.transition-colors.duration-500').first();
       const initialClass = await mainContainer.getAttribute('class') || '';
 
       // Toggle theme
