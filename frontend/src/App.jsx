@@ -987,25 +987,26 @@ function App() {
                       : "bg-slate-100 border border-slate-200 text-slate-800 rounded-tl-none")),
             msg.isEscalated && "border-l-4 border-l-rose-500 bg-rose-500/5"
           )}>
-            <ReactMarkdown 
-              className={cn(
-                "prose prose-sm max-w-none",
-                (isJarvis || darkMode) ? "prose-invert" : "prose-slate"
-              )}
-              components={{
-                strong: ({node, ...props}) => (
-                  <strong 
-                    className={cn("font-bold", 
-                      isJarvis ? "text-rose-300" : (darkMode ? "text-violet-300" : "text-violet-600")
-                    )} 
-                    {...props} 
-                  />
-                ),
-                p: ({node, ...props}) => <p className="mb-0 last:mb-0" {...props} />
-              }}
-            >
-              {msg.content}
-            </ReactMarkdown>
+            <div className={cn(
+              "prose prose-sm max-w-none",
+              (isJarvis || darkMode) ? "prose-invert" : "prose-slate"
+            )}>
+              <ReactMarkdown 
+                components={{
+                  strong: ({node, ...props}) => (
+                    <strong 
+                      className={cn("font-bold", 
+                        isJarvis ? "text-rose-300" : (darkMode ? "text-violet-300" : "text-violet-600")
+                      )} 
+                      {...props} 
+                    />
+                  ),
+                  p: ({node, ...props}) => <p className="mb-0 last:mb-0" {...props} />
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            </div>
             {msg.streaming && <span className="cursor-blink" />}
 
             <ProductCardsGrid 
