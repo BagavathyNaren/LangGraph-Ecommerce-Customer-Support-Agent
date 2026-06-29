@@ -13,7 +13,7 @@ export default defineConfig({
   reporter: 'html',
   use: {
     actionTimeout: 0,
-    baseURL: process.env.PLAYWRIGHT_TEST_URL || 'https://my-agentic-lab.web.app',
+    baseURL: process.env.PLAYWRIGHT_TEST_URL || 'http://localhost:4173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

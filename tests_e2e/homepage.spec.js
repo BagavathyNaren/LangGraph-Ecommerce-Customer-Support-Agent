@@ -1,11 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('E-Commerce Customer Support Agent E2E Suite', () => {
-  const targetUrl = process.env.PLAYWRIGHT_TEST_URL || 'https://my-agentic-lab.web.app';
 
   test('should load the homepage and check key visual components', async ({ page }) => {
-    // Navigate to the deployment URL
-    await page.goto(targetUrl);
+    // Navigate to the app using baseURL from playwright.config.js
+    await page.goto('/');
 
     // 1. Verify Title and Header
     await expect(page).toHaveTitle(/E-commerce Support Agent/i);
@@ -25,7 +24,7 @@ test.describe('E-Commerce Customer Support Agent E2E Suite', () => {
   });
 
   test('should toggle dark/light themes correctly', async ({ page }) => {
-    await page.goto(targetUrl);
+    await page.goto('/');
 
     // Locate the theme toggle button (often represented by a sun/moon icon or specific class/id)
     const themeToggle = page.locator('#theme-toggle, .theme-toggle, button:has-text("Theme"), button:has(.lucide-sun), button:has(.lucide-moon)');
@@ -46,7 +45,7 @@ test.describe('E-Commerce Customer Support Agent E2E Suite', () => {
   });
 
   test('should render skeleton loading state during product searches', async ({ page }) => {
-    await page.goto(targetUrl);
+    await page.goto('/');
 
     // Type a product search query in the chat input
     const chatInput = page.locator('input[placeholder*="Ask"], textarea[placeholder*="Ask"], #chat-input');
@@ -63,7 +62,7 @@ test.describe('E-Commerce Customer Support Agent E2E Suite', () => {
   });
 
   test('should check Jarvis Mode ORB and continuous waveform animations', async ({ page }) => {
-    await page.goto(targetUrl);
+    await page.goto('/');
 
     // Locate the voice waveform visualizer or JARVIS activation indicator
     const jarvisToggle = page.locator('#jarvis-toggle, .jarvis-btn, :text("Jarvis")');
@@ -84,7 +83,7 @@ test.describe('E-Commerce Customer Support Agent E2E Suite', () => {
   });
 
   test('should verify checkout confetti canvas element exists', async ({ page }) => {
-    await page.goto(targetUrl);
+    await page.goto('/');
 
     // Confetti canvas is typically appended to the body during checkout celebration
     const confettiCanvas = page.locator('canvas#confetti, canvas.confetti-canvas, canvas');
