@@ -13,7 +13,7 @@ export default defineConfig({
   reporter: 'html',
   use: {
     actionTimeout: 0,
-    baseURL: process.env.PLAYWRIGHT_TEST_URL || 'http://localhost:4173',
+    baseURL: process.env.PLAYWRIGHT_TEST_URL || 'http://127.0.0.1:4173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -33,8 +33,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'cd frontend && npm run preview -- --port 4173',
-    url: 'http://localhost:4173',
+    command: 'cd frontend && npm run preview -- --port 4173 --host 127.0.0.1',
+    url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },
