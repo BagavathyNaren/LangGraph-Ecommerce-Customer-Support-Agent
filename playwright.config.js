@@ -33,7 +33,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'cd frontend && npm run preview -- --port 4173 --host 127.0.0.1',
+    command: 'cd frontend && npm run dev -- --port 4173 --host 127.0.0.1',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

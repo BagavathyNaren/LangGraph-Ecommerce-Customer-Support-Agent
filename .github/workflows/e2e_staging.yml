@@ -22,12 +22,6 @@ jobs:
         run: |
           cd frontend
           npm install
-
-      - name: Build Frontend
-        run: |
-          cd frontend
-          CI=false npm run build
-
       - name: Install Playwright and dependencies
         run: |
           npm install @playwright/test
@@ -43,3 +37,4 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 10
+
