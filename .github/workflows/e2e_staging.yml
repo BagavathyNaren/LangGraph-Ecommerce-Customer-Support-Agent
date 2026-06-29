@@ -34,7 +34,7 @@ jobs:
         if: always()
         run: cat playwright_output.txt
 
-      - name: Comment PR with E2E test output
+      - name: Comment Commit with E2E test output
         uses: actions/github-script@v6
         if: always()
         with:
@@ -45,10 +45,10 @@ jobs:
                 log = fs.readFileSync('playwright_output.txt', 'utf8');
                 if (log.length > 60000) { log = log.substring(log.length - 60000); }
             }
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            github.rest.repos.createCommitComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
+              commit_sha: context.sha,
               body: '### E2E Test Output\n```text\n' + log + '\n```'
             })
 
