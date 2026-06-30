@@ -37,8 +37,9 @@ jobs:
           else
             gcloud run deploy ecommerce-support-agent \
               --source . \
-              --region us-central1 \
+              --region asia-south1 \
               --memory 4Gi \
               --max-instances 5 \
+              --allow-unauthenticated \
               --quiet
           fi
