@@ -255,7 +255,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 
 
 class ChatRequest(BaseModel):
@@ -375,7 +374,7 @@ def process_etas(secret: str = None):
 
 @app.get("/")
 def root():
-    return FileResponse("frontend/dist/index.html")
+    return {"status": "ok", "message": "Backend API is running. Frontend is served via Firebase Hosting."}
 
 
 @app.get("/health")
