@@ -6,7 +6,12 @@ load_dotenv()
 
 from security.env_validator import validate_env
 
-validate_env()
+is_configured = True
+try:
+    validate_env()
+except ValueError as e:
+    print(f"CRITICAL: Environment validation failed: {e}. Running in unconfigured mode.")
+    is_configured = False
 
 import asyncio
 import json
@@ -61,6 +66,11 @@ def get_final_response(result):
 async def lifespan(app: FastAPI):
     global graph
     logger.info("Starting up agent", extra={"event": "startup"})
+    if not is_configured:
+        logger.warning("Application is running in unconfigured mode. Skipping DB and Graph initialization.", extra={"event": "startup_skip"})
+        yield
+        return
+    
     init_analytics_db()
     # Self-healing DB migration: ensure phone_number column exists (safe for GCP migration)
     try:
@@ -218,6 +228,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.middleware("http")
+async def config_middleware(request: Request, call_next):
+    if not is_configured and request.url.path not in ["/health", "/", "/assets"]:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Service is currently unconfigured. Please configure environment variables in Cloud Run."}
+        )
+    return await call_next(request)
 
 from fastapi.middleware.cors import CORSMiddleware
 
