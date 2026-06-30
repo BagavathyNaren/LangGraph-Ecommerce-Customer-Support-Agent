@@ -19,7 +19,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20
 
       - name: Install Frontend Dependencies
         run: |
@@ -27,11 +27,19 @@ jobs:
           npm install
 
       - name: Build Frontend
+        env:
+          CI: false
         run: |
           cd frontend
           npm run build
 
       - name: Deploy to Firebase Hosting
-        run: npx firebase-tools deploy --only hosting --project my-agentic-lab
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          if [ -z "$FIREBASE_TOKEN" ]; then
+            echo "FIREBASE_TOKEN not set, skipping deployment."
+            exit 0
+          else
+            npx firebase-tools deploy --only hosting --project my-agentic-lab
+          fi
