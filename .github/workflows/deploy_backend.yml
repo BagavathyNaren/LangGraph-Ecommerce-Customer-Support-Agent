@@ -12,12 +12,14 @@ jobs:
   deploy:
     name: Build & Deploy Backend
     runs-on: ubuntu-latest
+    env:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Authenticate to GCP
-        if: ${{ secrets.GCP_SA_KEY != '' }}
+        if: ${{ env.GCP_SA_KEY != '' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
