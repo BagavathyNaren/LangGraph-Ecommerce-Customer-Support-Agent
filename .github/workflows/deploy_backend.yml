@@ -17,10 +17,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Authenticate to GCP
-        if: ${{ env.GCP_SA_KEY != '' }}
+        if: ${{ secrets.GCP_SA_KEY != '' }}
         uses: google-github-actions/auth@v2
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
@@ -38,7 +36,6 @@ jobs:
             gcloud run deploy ecommerce-support-agent \
               --source . \
               --region us-central1 \
-              --project my-agentic-lab \
               --memory 4Gi \
               --max-instances 5 \
               --quiet
