@@ -86,7 +86,7 @@ All phases have been expanded into granular, extensive checklists to ensure noth
 ## ⚡ Deployment & Staging Infrastructure
 
 *   **Frontend (Firebase Hosting)**: 🔗 [https://my-agentic-lab.web.app](https://my-agentic-lab.web.app)
-*   **Backend (GCP Cloud Run)**: 🔗 [https://ecommerce-support-agent-93337753347.us-central1.run.app](https://ecommerce-support-agent-93337753347.us-central1.run.app)
+*   **Backend (GCP Cloud Run)**: 🔗 *[Your Cloud Run URL (e.g. asia-south1)]*
 *   **Constraints**:
     *   **Cloud Run Memory**: Strictly limited to exactly `4Gi`.
     *   **VM (e2-micro)**: 1 instance, 30 GB Standard Disk.
