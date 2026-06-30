@@ -29,6 +29,7 @@ jobs:
       - name: Build Frontend
         env:
           CI: false
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: |
           cd frontend
           npm run build

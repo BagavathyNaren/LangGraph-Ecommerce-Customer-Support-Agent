@@ -629,7 +629,7 @@ function App() {
       return
     }
 
-    const BASE_URL = 'https://ecommerce-support-agent-93337753347.us-central1.run.app'
+    const BASE_URL = import.meta.env.VITE_API_URL || 'https://ecommerce-support-agent-93337753347.us-central1.run.app'
     const isJarvis = jarvisModeRef.current
     if (isJarvis) setJarvisState('speaking')
 
@@ -871,7 +871,7 @@ function App() {
     let metadata = {}
 
     try {
-      const BASE_URL = 'https://ecommerce-support-agent-93337753347.us-central1.run.app'
+      const BASE_URL = import.meta.env.VITE_API_URL || 'https://ecommerce-support-agent-93337753347.us-central1.run.app'
       const response = await fetch(`${BASE_URL}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
