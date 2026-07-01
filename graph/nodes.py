@@ -492,11 +492,22 @@ def agent_node(state: AgentState) -> AgentState:
                 if isinstance(m, ToolMessage) and m.name == "lookup_customer_orders" and m.content:
                     c_lower = m.content.lower()
                     if "country" in c_lower and not ("not found" in c_lower or "not_found" in c_lower):
-                        # Extract the country from the tool response string
-                        match = _re.search(r"'country':\s*'([^']+)'", m.content, _re.IGNORECASE)
-                        if match:
-                            profile_country = match.group(1)
-                            break
+                        # Primary: parse as JSON (tool returns json.dumps output with double quotes)
+                        try:
+                            import ast as _ast
+                            parsed = json.loads(m.content)
+                            customer = parsed.get("customer", parsed) if isinstance(parsed, dict) else {}
+                            if isinstance(customer, dict) and customer.get("country"):
+                                profile_country = customer["country"]
+                                break
+                        except Exception:
+                            pass
+                        # Fallback: regex matching both single and double quote formats
+                        if not profile_country:
+                            match = _re.search(r'["\']country["\']\s*:\s*["\']([^"\']+)["\']', m.content, _re.IGNORECASE)
+                            if match:
+                                profile_country = match.group(1)
+                                break
 
             if profile_country:
                 # OVERRIDE the LLM's chosen country with the profile country.
