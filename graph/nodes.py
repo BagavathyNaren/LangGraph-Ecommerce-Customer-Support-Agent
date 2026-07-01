@@ -499,21 +499,36 @@ def agent_node(state: AgentState) -> AgentState:
                             break
 
             if profile_country:
-                # OVERRIDE the LLM's chosen country with the profile country
+                # OVERRIDE the LLM's chosen country with the profile country.
+                # IMPORTANT: ToolCall objects are TypedDicts in langchain-core >= 0.3.
+                # In-place mutation (tc["args"]["country"] = ...) does NOT propagate
+                # when the message is serialised into LangGraph state. We MUST create
+                # a brand-new AIMessage with corrected tool_calls.
+                new_tool_calls = []
                 for tc in response.tool_calls:
                     if tc["name"] in ["search_catalog", "search_retailer_platform"]:
-                        tc["args"]["country"] = profile_country
-                
-                if hasattr(response, "additional_kwargs") and "tool_calls" in response.additional_kwargs:
-                    for tc in response.additional_kwargs["tool_calls"]:
-                        if tc.get("function", {}).get("name") in ["search_catalog", "search_retailer_platform"]:
-                            try:
-                                args = json.loads(tc["function"]["arguments"])
-                                args["country"] = profile_country
-                                tc["function"]["arguments"] = json.dumps(args)
-                            except Exception as e:
-                                logger.error("Failed to parse tool call args for country override", extra={"error": str(e)})
+                        # Build a fresh dict — never mutate the original TypedDict
+                        new_tc = {
+                            "name": tc["name"],
+                            "args": {**tc.get("args", {}), "country": profile_country},
+                            "id": tc["id"],
+                            "type": tc.get("type", "tool_call"),
+                        }
+                        new_tool_calls.append(new_tc)
+                        logger.info(
+                            "Profile country override applied",
+                            extra={
+                                "event": "country_override_applied",
+                                "profile_country": profile_country,
+                                "query": tc.get("args", {}).get("query", ""),
+                            },
+                        )
+                    else:
+                        new_tool_calls.append(tc)
+                # Replace response with a new AIMessage carrying the corrected tool_calls
+                response = AIMessage(content=response.content, tool_calls=new_tool_calls, id=response.id)
             elif not has_country_in_last_msg:
+
                 # Strip all search tool calls and ask for the country directly if no profile and no msg country
                 original_tool_calls = list(response.tool_calls)
                 response.tool_calls = [

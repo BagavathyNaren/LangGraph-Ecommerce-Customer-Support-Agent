@@ -57,10 +57,19 @@ When scanning conversation history for context:
 - The cancellation flow takes **absolute priority** over the escalation pathway.
 - Only trigger escalation for anger words **OUTSIDE** of an active order operation (cancellation, return, refund).
 
-
 ### Rule 7: LangChain Tool Call Interception
 
 When programmatically intercepting and overriding an LLM's tool call arguments in an `AIMessage` (e.g., in a guardrail node):
-- Mutating the parsed dictionary (`tc["args"]` inside `response.tool_calls`) is **insufficient**.
-- You **MUST** also parse, mutate, and re-serialize the raw JSON arguments string located inside `response.additional_kwargs["tool_calls"]`.
-- Failure to update `additional_kwargs` will result in the framework executing the original, un-mutated arguments.
+- **NEVER mutate `tc["args"]` in-place** — `ToolCall` objects are TypedDicts in `langchain-core >= 0.3`. In-place mutations do NOT propagate through LangGraph state serialization.
+- **NEVER patch `response.additional_kwargs["tool_calls"]`** — the `tool_node` reads from `last_message.tool_calls`, not `additional_kwargs`.
+- **ALWAYS create a brand-new `AIMessage`** with a freshly constructed `tool_calls` list:
+  ```python
+  new_tool_calls = []
+  for tc in response.tool_calls:
+      if tc["name"] == "target_tool":
+          new_tc = {"name": tc["name"], "args": {**tc["args"], "key": new_value}, "id": tc["id"], "type": tc.get("type", "tool_call")}
+          new_tool_calls.append(new_tc)
+      else:
+          new_tool_calls.append(tc)
+  response = AIMessage(content=response.content, tool_calls=new_tool_calls, id=response.id)
+  ```
