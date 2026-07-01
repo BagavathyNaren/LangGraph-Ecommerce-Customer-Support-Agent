@@ -503,6 +503,16 @@ def agent_node(state: AgentState) -> AgentState:
                 for tc in response.tool_calls:
                     if tc["name"] in ["search_catalog", "search_retailer_platform"]:
                         tc["args"]["country"] = profile_country
+                
+                if hasattr(response, "additional_kwargs") and "tool_calls" in response.additional_kwargs:
+                    for tc in response.additional_kwargs["tool_calls"]:
+                        if tc.get("function", {}).get("name") in ["search_catalog", "search_retailer_platform"]:
+                            try:
+                                args = json.loads(tc["function"]["arguments"])
+                                args["country"] = profile_country
+                                tc["function"]["arguments"] = json.dumps(args)
+                            except Exception as e:
+                                logger.error("Failed to parse tool call args for country override", extra={"error": str(e)})
             elif not has_country_in_last_msg:
                 # Strip all search tool calls and ask for the country directly if no profile and no msg country
                 original_tool_calls = list(response.tool_calls)

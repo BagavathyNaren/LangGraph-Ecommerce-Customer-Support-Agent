@@ -56,3 +56,11 @@ When scanning conversation history for context:
 - If the user is in an active cancellation flow (`is_cancelling == True`), completely **bypass** anger accumulation in `escalation_check`.
 - The cancellation flow takes **absolute priority** over the escalation pathway.
 - Only trigger escalation for anger words **OUTSIDE** of an active order operation (cancellation, return, refund).
+
+
+### Rule 7: LangChain Tool Call Interception
+
+When programmatically intercepting and overriding an LLM's tool call arguments in an `AIMessage` (e.g., in a guardrail node):
+- Mutating the parsed dictionary (`tc["args"]` inside `response.tool_calls`) is **insufficient**.
+- You **MUST** also parse, mutate, and re-serialize the raw JSON arguments string located inside `response.additional_kwargs["tool_calls"]`.
+- Failure to update `additional_kwargs` will result in the framework executing the original, un-mutated arguments.
