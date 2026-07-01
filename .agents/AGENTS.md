@@ -73,3 +73,18 @@ When programmatically intercepting and overriding an LLM's tool call arguments i
           new_tool_calls.append(tc)
   response = AIMessage(content=response.content, tool_calls=new_tool_calls, id=response.id)
   ```
+
+### Rule 8: Parsing ToolMessage Content from Agent Tools
+
+When reading the output of an agent tool in a `ToolMessage` (e.g., in a guardrail), always parse it with `json.loads()` as the primary method:
+- **NEVER rely on single-quote regex patterns** like `r"'key':\s*'value'"` — LangChain agent tools return `json.dumps()` output which uses **double quotes**, not Python's `str(dict)` format.
+- **Always use `json.loads()` first** and fall back to a dual-quote regex `r'["\']key["\']\s*:\s*["\']([^"\']+)["\']'` for older data.
+- Example:
+  ```python
+  try:
+      parsed = json.loads(tool_message.content)
+      country = parsed.get("customer", {}).get("country")
+  except Exception:
+      match = re.search(r'["\']country["\']\s*:\s*["\']([^"\']+)["\']', tool_message.content)
+      country = match.group(1) if match else None
+  ```
