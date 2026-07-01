@@ -274,3 +274,34 @@ body {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
 }
+/* Voice input animation */
+.voice-wave-bar {
+  width: 3px;
+  background-color: white;
+  border-radius: 9999px;
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.voice-wave-bar:nth-child(1) {
+  height: 40%;
+  animation-delay: -1.2s;
+}
+
+.voice-wave-bar:nth-child(2) {
+  height: 100%;
+  animation-delay: -1.0s;
+}
+
+.voice-wave-bar:nth-child(3) {
+  height: 60%;
+  animation-delay: -0.8s;
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
