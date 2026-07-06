@@ -78,7 +78,7 @@ ADDITIONAL GENERAL RULES:
 - USE 'create_support_ticket' for ANY complaint, stolen item, or complex request you cannot solve yourself. ALWAYS pass the customer_name as stated by the user in the conversation.
 - NEVER use 'create_new_order' for a support issue or complaint.
 - If a user asks about something completely outside of e-commerce, state clearly that you cannot assist.
-- TICKET ID RULE: Whenever a Ticket ID in the format TKT-XXXXX is present — either from a tool response OR mentioned earlier in this conversation — you MUST always include that exact Ticket ID verbatim in your reply. Never paraphrase, summarise, or omit it. Example: "Your Ticket ID is TKT-F03FFF."
+- TICKET ID RULE: You MUST call the 'create_support_ticket' tool first and ONLY use the Ticket ID that the tool returns in its response. NEVER invent, guess, or use a placeholder ticket ID such as "TKT-XXXXX". The real Ticket ID will look like "TKT-A1B2C3" (6 random hex characters). Once a real Ticket ID is returned by the tool, you MUST always include that exact ID verbatim in your reply. Example: "Your Ticket ID is TKT-F03FFF."
 
 VOICE INPUT ORDER ID RULE (CRITICAL):
 - Users often speak their order ID via voice and speech recognition may mishear "ORD" as "ODD", "odd", "or d", "OR D", etc.
@@ -742,6 +742,46 @@ def agent_node(state: AgentState) -> AgentState:
                     }
                 ]
 
+    # ═══ GUARDRAIL E: Intercept hallucinated TKT-XXXXX ticket IDs ═══
+    # If the LLM generates a text response containing the literal placeholder "TKT-XXXXX"
+    # without having called create_support_ticket, it has hallucinated the ticket ID.
+    # Strip the response and inject a real create_support_ticket tool call instead.
+    import re as _re_guard
+    has_hallucinated_ticket = (
+        not response.tool_calls
+        and bool(response.content)
+        and "TKT-XXXXX" in response.content
+    )
+    # Also catch any hallucinated TKT- that is NOT 6 uppercase hex chars (real IDs are TKT-A1B2C3)
+    has_fake_ticket_format = (
+        not response.tool_calls
+        and bool(response.content)
+        and _re_guard.search(r"TKT-[^0-9A-F]", response.content)
+    ) if not has_hallucinated_ticket else False
+
+    if has_hallucinated_ticket or has_fake_ticket_format:
+        logger.warning(
+            "Intercepted hallucinated ticket ID in LLM response — injecting create_support_ticket tool call",
+            extra={"event": "hallucinated_ticket_intercepted", "response_snippet": (response.content or "")[:200]},
+        )
+        # Extract customer name from conversation
+        support_customer_name = current_customer_name or "Customer"
+        support_order_id = new_order_id or state.get("order_id")
+        response.content = ""
+        response.tool_calls = [
+            {
+                "name": "create_support_ticket",
+                "args": {
+                    "order_id": support_order_id or "",
+                    "issue_type": "Complaint",
+                    "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                    "customer_name": support_customer_name,
+                },
+                "id": f"call_{uuid.uuid4().hex[:12]}",
+                "type": "tool_call",
+            }
+        ]
+
     logger.info(
         "Agent node response details",
         extra={"tool_calls": response.tool_calls, "content_len": len(response.content) if response.content else 0},
@@ -895,7 +935,12 @@ def escalate(state: AgentState) -> AgentState:
     import re as _re
 
     messages = state.get("messages", [])
-    already_escalated = any("TKT-" in m.content for m in messages if isinstance(m, AIMessage))
+    # Check if a REAL ticket was already created (ignore hallucinated "TKT-XXXXX" placeholder)
+    already_escalated = any(
+        _re.search(r"TKT-[0-9A-F]{6}\b", m.content)
+        for m in messages
+        if isinstance(m, AIMessage)
+    )
 
     if already_escalated:
         reply = "Your case is already escalated. A human agent will contact you soon."
