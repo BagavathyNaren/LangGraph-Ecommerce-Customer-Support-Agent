@@ -93,6 +93,7 @@ ORDERING, REGISTRATION & PRODUCT SELECTION FLOW — FOLLOW THIS EXACTLY:
    - We ONLY support ordering, customer registration, and checking product catalogs for five countries: **UAE, Japan, US, UK, and India**.
    - If a customer explicitly states they are in an unsupported country (any region other than UAE, Japan, US, UK, and India, such as China, Canada, Germany, etc.), you MUST immediately and politely reject their request, explaining that we only support UAE, Japan, US, UK, and India. Do NOT call any product search or registration tools for unsupported countries.
    - For supported countries, check the entire conversation history (including the user's very first message) to see if they have explicitly stated their country. If the country is mentioned anywhere in the conversation history, or is found in their registered profile from `lookup_customer_orders`, you MUST use that country and proceed. ONLY stop and ask the user for their country (e.g., "Could you please let me know which country you are in so I can check the local catalogs?") if it has not been mentioned anywhere in the conversation history and is not found in their profile.
+   - **REGISTERED PROFILE COUNTRY OVERRIDE (CRITICAL)**: If a customer is registered and their profile from `lookup_customer_orders` contains a `country` field, that profile country ALWAYS takes precedence over any country the user mentions in their search request. For example, if a registered UK customer says "Search for a PlayStation 5 in India", you MUST search using country="UK" (their profile country), NOT "India". Politely inform the customer that you are searching based on their registered profile country. NEVER use a different country than the one in their registered profile for product searches.
 1. ONLY start the ordering flow if the customer EXPLICITLY states they want to buy, purchase, or order an item. If they simply provide an email address without explicitly saying they want to place an order, DO NOT call `create_new_order`. **EXCEPTION**: If you have already displayed the options, the customer selected one (or clicked Checkout), and you then explicitly asked them for their email address, once they provide their email address, you **MUST** immediately call `register_customer` and `create_new_order` in parallel in that turn to complete the purchase, even if their message only contains their email address and no purchase verbs.
 2. **FIRST-TURN CUSTOMER LOOKUP & CATALOG SEARCH (CRITICAL)**:
    - If the user introduces themselves by name (e.g., "My name is Fatima") AND expresses purchase intent (e.g., "I want to buy X"), you MUST first call `lookup_customer_orders` (using their name) in your first turn to verify if they are registered.
@@ -491,23 +492,41 @@ def agent_node(state: AgentState) -> AgentState:
             for m in reversed(state["messages"]):
                 if isinstance(m, ToolMessage) and m.name == "lookup_customer_orders" and m.content:
                     c_lower = m.content.lower()
-                    if "country" in c_lower and not ("not found" in c_lower or "not_found" in c_lower):
-                        # Primary: parse as JSON (tool returns json.dumps output with double quotes)
-                        try:
-                            import ast as _ast
-                            parsed = json.loads(m.content)
-                            customer = parsed.get("customer", parsed) if isinstance(parsed, dict) else {}
-                            if isinstance(customer, dict) and customer.get("country"):
-                                profile_country = customer["country"]
+                    if "not found" in c_lower or "not_found" in c_lower:
+                        continue  # Skip failed lookups
+                    # Primary: parse as JSON (tool returns json.dumps output with double quotes)
+                    try:
+                        parsed = json.loads(m.content)
+                        customer = parsed.get("customer", parsed) if isinstance(parsed, dict) else {}
+                        if isinstance(customer, dict):
+                            raw_country = customer.get("country")
+                            if raw_country and str(raw_country).strip().lower() not in ["none", "null", ""]:
+                                profile_country = str(raw_country).strip()
+                                logger.info(
+                                    "Profile country extracted from lookup",
+                                    extra={"event": "profile_country_found", "profile_country": profile_country},
+                                )
                                 break
-                        except Exception:
-                            pass
-                        # Fallback: regex matching both single and double quote formats
-                        if not profile_country:
-                            match = _re.search(r'["\']country["\']\s*:\s*["\']([^"\']+)["\']', m.content, _re.IGNORECASE)
-                            if match:
-                                profile_country = match.group(1)
-                                break
+                            else:
+                                logger.info(
+                                    "Customer profile found but country is null/empty",
+                                    extra={"event": "profile_country_null", "customer_name": customer.get("name")},
+                                )
+                    except Exception as parse_err:
+                        logger.warning(
+                            f"Failed to parse lookup response as JSON: {parse_err}",
+                            extra={"event": "profile_country_parse_error"},
+                        )
+                    # Fallback: regex matching both single and double quote formats
+                    if not profile_country:
+                        match = _re.search(r'["\']country["\']\s*:\s*["\']([^"\',]+)["\']', m.content, _re.IGNORECASE)
+                        if match and match.group(1).lower() not in ["none", "null"]:
+                            profile_country = match.group(1).strip()
+                            logger.info(
+                                "Profile country extracted via regex fallback",
+                                extra={"event": "profile_country_regex", "profile_country": profile_country},
+                            )
+                            break
 
             if profile_country:
                 # OVERRIDE the LLM's chosen country with the profile country.
@@ -515,9 +534,11 @@ def agent_node(state: AgentState) -> AgentState:
                 # In-place mutation (tc["args"]["country"] = ...) does NOT propagate
                 # when the message is serialised into LangGraph state. We MUST create
                 # a brand-new AIMessage with corrected tool_calls.
+                llm_requested_country = None
                 new_tool_calls = []
                 for tc in response.tool_calls:
                     if tc["name"] in ["search_catalog", "search_retailer_platform"]:
+                        llm_requested_country = tc.get("args", {}).get("country", "Unknown")
                         # Build a fresh dict — never mutate the original TypedDict
                         new_tc = {
                             "name": tc["name"],
@@ -531,6 +552,7 @@ def agent_node(state: AgentState) -> AgentState:
                             extra={
                                 "event": "country_override_applied",
                                 "profile_country": profile_country,
+                                "llm_requested_country": llm_requested_country,
                                 "query": tc.get("args", {}).get("query", ""),
                             },
                         )
