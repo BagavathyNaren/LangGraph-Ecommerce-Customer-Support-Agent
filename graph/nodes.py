@@ -973,35 +973,57 @@ def escalate(state: AgentState) -> AgentState:
         ticket_id = f"TKT-{uuid.uuid4().hex[:6].upper()}"
         order_id = state.get("order_id")
 
-        # Scan conversation history in REVERSE order for most recent order ID and customer name if not in state
+        # Scan conversation history for order ID and customer name.
+        # Priority order (most → least reliable):
+        #   1. lookup_customer_orders ToolMessage (DB-verified name)
+        #   2. AIMessage tool_call args (e.g., create_new_order, register_customer)
+        #   3. HumanMessage regex (last resort — prone to false matches like "this is unacceptable")
         customer_name = None
         for m in reversed(messages):
-            # Check AIMessage for tool calls containing order_id or customer_name
-            if isinstance(m, AIMessage) and m.tool_calls:
+            # 1. Best source: lookup_customer_orders ToolMessage has DB-verified customer name
+            if isinstance(m, ToolMessage) and m.name == "lookup_customer_orders" and m.content:
+                try:
+                    import json as _json_e
+                    parsed = _json_e.loads(m.content)
+                    customer_data = parsed.get("customer", {}) if isinstance(parsed, dict) else {}
+                    if isinstance(customer_data, dict) and customer_data.get("name"):
+                        customer_name = customer_data["name"]
+                        break
+                except Exception:
+                    pass
+
+            # 2. AIMessage tool call args (register_customer, create_new_order contain name)
+            if not customer_name and isinstance(m, AIMessage) and m.tool_calls:
                 for tc in m.tool_calls:
                     tc_args = tc.get("args", {})
                     if not order_id and "order_id" in tc_args:
                         order_id = str(tc_args["order_id"]).upper()
-                    if not customer_name and "customer_name" in tc_args:
-                        customer_name = tc_args["customer_name"]
+                    if "customer_name" in tc_args:
+                        # Only use if it doesn't look like a complaint phrase
+                        candidate = str(tc_args["customer_name"]).strip()
+                        if candidate and len(candidate.split()) <= 5:
+                            customer_name = candidate
+                            break
 
-            if isinstance(m, HumanMessage):
-                # Extract order IDs like ORD001, ORD 001, ORD1234
-                if not order_id:
-                    order_match = _re.search(r"\b(ORD\s*\d{3,10})\b", m.content, _re.IGNORECASE)
-                    if order_match:
-                        order_id = _re.sub(r"\s+", "", order_match.group(1)).upper()
-                # Extract customer name from "I am X" or "my name is X" patterns
-                if not customer_name:
-                    extracted = extract_customer_name(m.content)
-                    if extracted:
-                        customer_name = extracted
-            elif isinstance(m, ToolMessage):
-                # Extract customer info from tool responses
-                if not order_id:
-                    order_match = _re.search(r"\b(ORD\s*\d{3,10})\b", m.content, _re.IGNORECASE)
-                    if order_match:
-                        order_id = _re.sub(r"\s+", "", order_match.group(1)).upper()
+            if customer_name:
+                break
+
+        # 3. Last resort: regex on HumanMessages for introduction phrases only
+        # (intentionally NOT matching "this is" to avoid "this is unacceptable" → name)
+        if not customer_name:
+            for m in reversed(messages):
+                if isinstance(m, HumanMessage):
+                    intro_match = _re.search(
+                        r"(?:my\s+(?:full\s+)?name\s+is|I\s+am|I\'m)\s*[,:]?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+                        m.content,
+                    )
+                    if intro_match:
+                        customer_name = intro_match.group(1).strip()
+                        break
+                    if not order_id:
+                        order_match = _re.search(r"\b(ORD\s*\d{3,10})\b", m.content, _re.IGNORECASE)
+                        if order_match:
+                            order_id = _re.sub(r"\s+", "", order_match.group(1)).upper()
 
         # Summarize the conversation to provide context for the human agent
         history_lines = [
