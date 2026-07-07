@@ -746,41 +746,38 @@ def agent_node(state: AgentState) -> AgentState:
     # If the LLM generates a text response containing the literal placeholder "TKT-XXXXX"
     # without having called create_support_ticket, it has hallucinated the ticket ID.
     # Strip the response and inject a real create_support_ticket tool call instead.
-    import re as _re_guard
     has_hallucinated_ticket = (
         not response.tool_calls
         and bool(response.content)
         and "TKT-XXXXX" in response.content
     )
-    # Also catch any hallucinated TKT- that is NOT 6 uppercase hex chars (real IDs are TKT-A1B2C3)
-    has_fake_ticket_format = (
-        not response.tool_calls
-        and bool(response.content)
-        and _re_guard.search(r"TKT-[^0-9A-F]", response.content)
-    ) if not has_hallucinated_ticket else False
 
-    if has_hallucinated_ticket or has_fake_ticket_format:
+    if has_hallucinated_ticket:
         logger.warning(
-            "Intercepted hallucinated ticket ID in LLM response — injecting create_support_ticket tool call",
+            "Intercepted hallucinated TKT-XXXXX in LLM response — injecting create_support_ticket tool call",
             extra={"event": "hallucinated_ticket_intercepted", "response_snippet": (response.content or "")[:200]},
         )
         # Extract customer name from conversation
         support_customer_name = current_customer_name or "Customer"
         support_order_id = new_order_id or state.get("order_id")
-        response.content = ""
-        response.tool_calls = [
-            {
-                "name": "create_support_ticket",
-                "args": {
-                    "order_id": support_order_id or "",
-                    "issue_type": "Complaint",
-                    "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
-                    "customer_name": support_customer_name,
-                },
-                "id": f"call_{uuid.uuid4().hex[:12]}",
-                "type": "tool_call",
-            }
-        ]
+        # Create a fresh AIMessage with the real tool call — do NOT mutate response
+        response = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "create_support_ticket",
+                    "args": {
+                        "order_id": support_order_id or "",
+                        "issue_type": "Complaint",
+                        "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                        "customer_name": support_customer_name,
+                    },
+                    "id": f"call_{uuid.uuid4().hex[:12]}",
+                    "type": "tool_call",
+                }
+            ],
+            id=response.id,
+        )
 
     logger.info(
         "Agent node response details",
