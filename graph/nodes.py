@@ -742,50 +742,66 @@ def agent_node(state: AgentState) -> AgentState:
                     }
                 ]
 
-    # ═══ GUARDRAIL E: Intercept any hallucinated Ticket ID in LLM response ═══
-    # The LLM sometimes generates a TKT-XXXXXX ID in its text WITHOUT calling
-    # create_support_ticket first (hallucination). This guardrail detects any TKT-
-    # pattern in a plain-text response and verifies it against actual tool history.
-    # If no real ticket was created in this conversation, it intercepts and injects
-    # the real create_support_ticket tool call.
-    if not response.tool_calls and response.content and "TKT-" in response.content:
-        # Check whether a REAL ticket was already created in this conversation
-        real_ticket_in_history = any(
-            isinstance(m, ToolMessage)
-            and m.name == "create_support_ticket"
-            and m.content
-            and "TKT-" in m.content
-            for m in state["messages"]
-        )
+    # ═══ GUARDRAIL E: Intercept hallucinated ticket creation claims ═══
+    # The LLM sometimes claims to have created a support ticket (with or without
+    # a TKT- ID) in its plain text WITHOUT actually calling create_support_ticket.
+    # Detect both patterns:
+    #   A) Response contains "TKT-" but no real ticket exists in tool history
+    #   B) Response claims to have created/submitted a ticket without calling the tool
+    _TICKET_CLAIM_PHRASES = [
+        "created a support ticket",
+        "created a ticket",
+        "submitted a support ticket",
+        "submitted a ticket",
+        "opened a support ticket",
+        "raised a support ticket",
+        "escalated your case",
+        "support ticket to address",
+        "support ticket for",
+    ]
+    if not response.tool_calls and response.content:
+        _content_lower = response.content.lower()
+        _has_tkt_pattern = "TKT-" in response.content
+        _has_ticket_claim = any(phrase in _content_lower for phrase in _TICKET_CLAIM_PHRASES)
 
-        if not real_ticket_in_history:
-            # The LLM has hallucinated a ticket ID — intercept it
-            logger.warning(
-                "Intercepted hallucinated Ticket ID in LLM response — injecting create_support_ticket call",
-                extra={
-                    "event": "hallucinated_ticket_intercepted",
-                    "response_snippet": (response.content or "")[:200],
-                },
+        if _has_tkt_pattern or _has_ticket_claim:
+            # Check whether a REAL ticket was already created in this conversation
+            real_ticket_in_history = any(
+                isinstance(m, ToolMessage)
+                and m.name == "create_support_ticket"
+                for m in state["messages"]
             )
-            support_customer_name = current_customer_name or "Customer"
-            support_order_id = new_order_id or state.get("order_id")
-            response = AIMessage(
-                content="",
-                tool_calls=[
-                    {
-                        "name": "create_support_ticket",
-                        "args": {
-                            "order_id": support_order_id or "",
-                            "issue_type": "Complaint",
-                            "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
-                            "customer_name": support_customer_name,
-                        },
-                        "id": f"call_{uuid.uuid4().hex[:12]}",
-                        "type": "tool_call",
-                    }
-                ],
-                id=response.id,
-            )
+
+            if not real_ticket_in_history:
+                # The LLM is hallucinating a ticket — intercept and call the real tool
+                logger.warning(
+                    "Intercepted hallucinated ticket claim in LLM response — injecting create_support_ticket call",
+                    extra={
+                        "event": "hallucinated_ticket_intercepted",
+                        "has_tkt_pattern": _has_tkt_pattern,
+                        "has_ticket_claim": _has_ticket_claim,
+                        "response_snippet": (response.content or "")[:200],
+                    },
+                )
+                support_customer_name = current_customer_name or "Customer"
+                support_order_id = new_order_id or state.get("order_id")
+                response = AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "create_support_ticket",
+                            "args": {
+                                "order_id": support_order_id or "",
+                                "issue_type": "Complaint",
+                                "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                                "customer_name": support_customer_name,
+                            },
+                            "id": f"call_{uuid.uuid4().hex[:12]}",
+                            "type": "tool_call",
+                        }
+                    ],
+                    id=response.id,
+                )
 
     logger.info(
         "Agent node response details",
@@ -891,7 +907,11 @@ def escalation_check(state: AgentState) -> AgentState:
     last_message = human_messages[-1].content.lower()
 
     # Standard anger keywords
-    anger_words = ["angry", "furious", "terrible", "worst", "useless", "refund now", "escalate"]
+    anger_words = [
+        "angry", "furious", "terrible", "worst", "useless", "refund now", "escalate",
+        "unacceptable", "outrageous", "disgusting", "ridiculous", "horrible", "pathetic",
+        "demand", "lawsuit", "never again", "frustrated", "incompetent", "disgraceful",
+    ]
 
     anger_count = state.get("anger_count", 0)
     retry_count = state.get("retry_count", 0)
