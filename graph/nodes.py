@@ -78,7 +78,7 @@ ADDITIONAL GENERAL RULES:
 - USE 'create_support_ticket' for ANY complaint, stolen item, or complex request you cannot solve yourself. ALWAYS pass the customer_name as stated by the user in the conversation.
 - NEVER use 'create_new_order' for a support issue or complaint.
 - If a user asks about something completely outside of e-commerce, state clearly that you cannot assist.
-- TICKET ID RULE: You MUST call the 'create_support_ticket' tool first and ONLY use the Ticket ID that the tool returns in its response. NEVER invent, guess, or use a placeholder ticket ID such as "TKT-XXXXX". The real Ticket ID will look like "TKT-A1B2C3" (6 random hex characters). Once a real Ticket ID is returned by the tool, you MUST always include that exact ID verbatim in your reply. Example: "Your Ticket ID is TKT-F03FFF."
+- TICKET ID RULE (CRITICAL): You are STRICTLY FORBIDDEN from writing any Ticket ID in your response unless that exact ID was returned by a 'create_support_ticket' tool call in this conversation. You MUST call the 'create_support_ticket' tool and wait for its response before mentioning any Ticket ID. NEVER invent, guess, or use any placeholder — the tool will provide the real ID.
 
 VOICE INPUT ORDER ID RULE (CRITICAL):
 - Users often speak their order ID via voice and speech recognition may mishear "ORD" as "ODD", "odd", "or d", "OR D", etc.
@@ -742,42 +742,50 @@ def agent_node(state: AgentState) -> AgentState:
                     }
                 ]
 
-    # ═══ GUARDRAIL E: Intercept hallucinated TKT-XXXXX ticket IDs ═══
-    # If the LLM generates a text response containing the literal placeholder "TKT-XXXXX"
-    # without having called create_support_ticket, it has hallucinated the ticket ID.
-    # Strip the response and inject a real create_support_ticket tool call instead.
-    has_hallucinated_ticket = (
-        not response.tool_calls
-        and bool(response.content)
-        and "TKT-XXXXX" in response.content
-    )
+    # ═══ GUARDRAIL E: Intercept any hallucinated Ticket ID in LLM response ═══
+    # The LLM sometimes generates a TKT-XXXXXX ID in its text WITHOUT calling
+    # create_support_ticket first (hallucination). This guardrail detects any TKT-
+    # pattern in a plain-text response and verifies it against actual tool history.
+    # If no real ticket was created in this conversation, it intercepts and injects
+    # the real create_support_ticket tool call.
+    if not response.tool_calls and response.content and "TKT-" in response.content:
+        # Check whether a REAL ticket was already created in this conversation
+        real_ticket_in_history = any(
+            isinstance(m, ToolMessage)
+            and m.name == "create_support_ticket"
+            and m.content
+            and "TKT-" in m.content
+            for m in state["messages"]
+        )
 
-    if has_hallucinated_ticket:
-        logger.warning(
-            "Intercepted hallucinated TKT-XXXXX in LLM response — injecting create_support_ticket tool call",
-            extra={"event": "hallucinated_ticket_intercepted", "response_snippet": (response.content or "")[:200]},
-        )
-        # Extract customer name from conversation
-        support_customer_name = current_customer_name or "Customer"
-        support_order_id = new_order_id or state.get("order_id")
-        # Create a fresh AIMessage with the real tool call — do NOT mutate response
-        response = AIMessage(
-            content="",
-            tool_calls=[
-                {
-                    "name": "create_support_ticket",
-                    "args": {
-                        "order_id": support_order_id or "",
-                        "issue_type": "Complaint",
-                        "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
-                        "customer_name": support_customer_name,
-                    },
-                    "id": f"call_{uuid.uuid4().hex[:12]}",
-                    "type": "tool_call",
-                }
-            ],
-            id=response.id,
-        )
+        if not real_ticket_in_history:
+            # The LLM has hallucinated a ticket ID — intercept it
+            logger.warning(
+                "Intercepted hallucinated Ticket ID in LLM response — injecting create_support_ticket call",
+                extra={
+                    "event": "hallucinated_ticket_intercepted",
+                    "response_snippet": (response.content or "")[:200],
+                },
+            )
+            support_customer_name = current_customer_name or "Customer"
+            support_order_id = new_order_id or state.get("order_id")
+            response = AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "create_support_ticket",
+                        "args": {
+                            "order_id": support_order_id or "",
+                            "issue_type": "Complaint",
+                            "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                            "customer_name": support_customer_name,
+                        },
+                        "id": f"call_{uuid.uuid4().hex[:12]}",
+                        "type": "tool_call",
+                    }
+                ],
+                id=response.id,
+            )
 
     logger.info(
         "Agent node response details",
