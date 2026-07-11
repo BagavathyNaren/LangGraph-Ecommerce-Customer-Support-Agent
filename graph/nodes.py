@@ -954,28 +954,9 @@ def agent_node(state: AgentState) -> AgentState:
         for kw in _delivery_complaint_keywords
     )
     
-    # --- DEBUG LOGGING ---
-    logger.info(
-        "ABSOLUTE FINAL ENFORCER EVALUATION",
-        extra={
-            "support_order_id": support_order_id,
-            "is_delivery_complaint": _is_delivery_complaint,
-            "last_msg_content": last_msg.content if isinstance(last_msg, HumanMessage) else None,
-        }
-    )
-    
     if _is_delivery_complaint:
         delivery_date = _get_order_delivery_date_from_history(state["messages"], support_order_id)
         today = date.today()
-        
-        logger.info(
-            "ABSOLUTE FINAL ENFORCER DATES",
-            extra={
-                "delivery_date": str(delivery_date) if delivery_date else None,
-                "today": str(today),
-                "is_overdue": (delivery_date < today) if delivery_date else False,
-            }
-        )
         
         if delivery_date and delivery_date < today:
             _has_tool = any(tc["name"] == "create_support_ticket" for tc in response.tool_calls)
