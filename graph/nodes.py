@@ -921,6 +921,74 @@ def agent_node(state: AgentState) -> AgentState:
                     "react_iterations": react_iterations,
                 }
 
+    # ABSOLUTE FINAL ENFORCER: Overdue Delivery Complaint
+    # Catches cases where Guardrails skipped due to unexpected LLM tool_calls or missing TKT patterns
+    support_order_id = new_order_id or state.get("order_id")
+    _delivery_complaint_keywords = [
+        "never arrived", "not arrived", "hasn't arrived", "hasn't been delivered",
+        "not delivered", "didn't arrive", "didn't receive", "never received",
+        "missing", "delayed", "been weeks", "been days", "waiting for",
+        "where is my", "still waiting", "not here yet",
+    ]
+    _is_delivery_complaint = any(
+        kw in (last_msg.content.lower() if isinstance(last_msg, HumanMessage) else "")
+        for kw in _delivery_complaint_keywords
+    )
+    if _is_delivery_complaint:
+        delivery_date = _get_order_delivery_date_from_history(state["messages"], support_order_id)
+        today = date.today()
+        if delivery_date and delivery_date < today:
+            _has_tool = any(tc["name"] == "create_support_ticket" for tc in response.tool_calls)
+            _has_ticket_in_history = False
+            _ticket_id = "a new ticket"
+            import re as _re_tmp
+            for m in state["messages"]:
+                if isinstance(m, ToolMessage) and m.name == "create_support_ticket":
+                    _has_ticket_in_history = True
+                    match = _re_tmp.search(r"TKT-[0-9A-F]+", str(m.content))
+                    if match:
+                        _ticket_id = match.group(0)
+                        
+            _has_tkt_in_response = _re_tmp.search(r"TKT-[0-9A-F]+", response.content or "")
+            
+            if not _has_tool and not _has_tkt_in_response:
+                logger.warning("ABSOLUTE FINAL ENFORCER: Forcing overdue ticket response")
+                if not _has_ticket_in_history:
+                    support_customer_name = current_customer_name or "Customer"
+                    from tools.real_tools import create_support_ticket
+                    ticket_resp = create_support_ticket(
+                        order_id=support_order_id or "",
+                        issue_type="Complaint",
+                        message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                        customer_name=support_customer_name
+                    )
+                    match = _re_tmp.search(r"TKT-[0-9A-F]+", str(ticket_resp))
+                    if match:
+                        _ticket_id = match.group(0)
+                        
+                    tc_id = f"call_{uuid.uuid4().hex[:12]}"
+                    ai_msg_call = AIMessage(content="", tool_calls=[{"name": "create_support_ticket", "args": {"order_id": support_order_id or "", "issue_type": "Complaint", "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation", "customer_name": support_customer_name}, "id": tc_id, "type": "tool_call"}])
+                    tool_msg = ToolMessage(content=str(ticket_resp), name="create_support_ticket", tool_call_id=tc_id)
+                    final_msg = AIMessage(
+                        content=f"I deeply apologize for the delay. Since your expected delivery date has passed, I have immediately escalated this to our human support team. Your ticket ID is **{_ticket_id}**. A representative will reach out to you shortly."
+                    )
+                    return {
+                        "messages": [ai_msg_call, tool_msg, final_msg] + messages_to_remove,
+                        "intent": new_intent,
+                        "order_id": new_order_id,
+                        "react_iterations": react_iterations,
+                    }
+                else:
+                    final_msg = AIMessage(
+                        content=f"I deeply apologize for the delay. Since your expected delivery date has passed, I have immediately escalated this to our human support team. Your ticket ID is **{_ticket_id}**. A representative will reach out to you shortly."
+                    )
+                    return {
+                        "messages": [final_msg] + messages_to_remove,
+                        "intent": new_intent,
+                        "order_id": new_order_id,
+                        "react_iterations": react_iterations,
+                    }
+
     logger.info(
         "Agent node response details",
         extra={"tool_calls": response.tool_calls, "content_len": len(response.content) if response.content else 0},
