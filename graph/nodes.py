@@ -9,7 +9,7 @@ from langchain_openai import ChatOpenAI
 from graph.state import AgentState
 from logger import get_logger
 from tools.agent_tools import AGENT_TOOLS
-from tools.real_tools import create_support_ticket
+from tools.real_tools import create_support_ticket as _real_create_support_ticket
 
 logger = get_logger("ecommerce-agent")
 
@@ -72,6 +72,17 @@ def _get_order_delivery_date_from_history(messages, order_id: str | None) -> dat
         except (json.JSONDecodeError, TypeError, KeyError):
             continue
     return None
+
+
+def _create_ticket_sync(order_id: str, issue_type: str, message: str, customer_name: str | None = None) -> dict | str:
+    """Synchronously create a support ticket by calling the real_tools function directly.
+    Generates a ticket_id and passes all required arguments."""
+    ticket_id = f"TKT-{uuid.uuid4().hex[:6].upper()}"
+    result = _real_create_support_ticket(ticket_id, order_id, issue_type, message, customer_name)
+    # Return the result dict, but also embed the ticket_id for easy extraction
+    if isinstance(result, dict) and result.get("success"):
+        result["ticket_id"] = ticket_id
+    return result
 
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True, request_timeout=30)
@@ -844,8 +855,7 @@ def agent_node(state: AgentState) -> AgentState:
                     },
                 )
                 support_customer_name = current_customer_name or "Customer"
-                from tools.real_tools import create_support_ticket
-                ticket_resp = create_support_ticket(
+                ticket_resp = _create_ticket_sync(
                     order_id=support_order_id or "",
                     issue_type="Complaint",
                     message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
@@ -904,8 +914,7 @@ def agent_node(state: AgentState) -> AgentState:
                     },
                 )
                 support_customer_name = current_customer_name or "Customer"
-                from tools.agent_tools import create_support_ticket
-                ticket_resp = create_support_ticket(
+                ticket_resp = _create_ticket_sync(
                     order_id=support_order_id or "",
                     issue_type="Complaint",
                     message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
@@ -986,8 +995,7 @@ def agent_node(state: AgentState) -> AgentState:
                 logger.warning("ABSOLUTE FINAL ENFORCER: Forcing overdue ticket response")
                 if not _has_ticket_in_history:
                     support_customer_name = current_customer_name or "Customer"
-                    from tools.agent_tools import create_support_ticket
-                    ticket_resp = create_support_ticket(
+                    ticket_resp = _create_ticket_sync(
                         order_id=support_order_id or "",
                         issue_type="Complaint",
                         message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
@@ -1297,7 +1305,7 @@ def escalate(state: AgentState) -> AgentState:
                 f"we will immediately escalate it for you."
             )
         else:
-            result = create_support_ticket(ticket_id, order_id, "Automated Escalation", history, customer_name)
+            result = _real_create_support_ticket(ticket_id, order_id, "Automated Escalation", history, customer_name)
             # Use the actual ticket ID from result (handles duplicate case where existing ticket was found)
             actual_ticket_id = result.get("ticket_id", ticket_id)
             if result.get("duplicate"):
