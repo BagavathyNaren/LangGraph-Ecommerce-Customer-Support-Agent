@@ -879,7 +879,7 @@ def tool_node(state: AgentState) -> AgentState:
                 },
             )
 
-        return ToolMessage(content=str(result), tool_call_id=tool_call["id"]), tool_name, tool_args
+        return ToolMessage(content=str(result), tool_call_id=tool_call["id"], name=tool_name), tool_name, tool_args
 
     # Execute all tool calls concurrently
     with ThreadPoolExecutor(max_workers=min(len(tool_calls), 5)) as executor:
@@ -980,14 +980,25 @@ def escalate(state: AgentState) -> AgentState:
         #   3. HumanMessage regex (last resort — prone to false matches like "this is unacceptable")
         customer_name = None
         for m in reversed(messages):
-            # 1. Best source: lookup_customer_orders ToolMessage has DB-verified customer name
-            if isinstance(m, ToolMessage) and m.name == "lookup_customer_orders" and m.content:
+            # 1. Best source: lookup_customer_orders ToolMessage (name=tool_name now set in tool_node)
+            #    Also detect by content format as a fallback in case name is not set.
+            is_lookup_tool = isinstance(m, ToolMessage) and (
+                m.name == "lookup_customer_orders"
+                or (m.content and '"customer"' in m.content and '"name"' in m.content)
+            )
+            if is_lookup_tool:
                 try:
                     import json as _json_e
                     parsed = _json_e.loads(m.content)
                     customer_data = parsed.get("customer", {}) if isinstance(parsed, dict) else {}
                     if isinstance(customer_data, dict) and customer_data.get("name"):
                         customer_name = customer_data["name"]
+                        # Also extract order_id from customer orders if needed
+                        if not order_id and isinstance(parsed.get("orders"), list):
+                            for o in parsed["orders"]:
+                                if o.get("order_id"):
+                                    order_id = str(o["order_id"]).upper()
+                                    break
                         break
                 except Exception:
                     pass
@@ -998,14 +1009,16 @@ def escalate(state: AgentState) -> AgentState:
                     tc_args = tc.get("args", {})
                     if not order_id and "order_id" in tc_args:
                         order_id = str(tc_args["order_id"]).upper()
-                    if "customer_name" in tc_args:
-                        # Only use if it doesn't look like a complaint phrase
+                    # Only use customer_name from tool args if it looks like a real name
+                    if "customer_name" in tc_args and not customer_name:
                         candidate = str(tc_args["customer_name"]).strip()
-                        if candidate and len(candidate.split()) <= 5:
+                        # Real names: 1-5 words, no common complaint words
+                        complaint_words = {"unacceptable", "terrible", "horrible", "disgusting", "furious"}
+                        candidate_lower_words = set(candidate.lower().split())
+                        if candidate and len(candidate.split()) <= 5 and not candidate_lower_words.intersection(complaint_words):
                             customer_name = candidate
-                            break
 
-            if customer_name:
+            if customer_name and order_id:
                 break
 
         # 3. Last resort: regex on HumanMessages for introduction phrases only
