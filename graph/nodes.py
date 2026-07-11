@@ -799,87 +799,113 @@ def agent_node(state: AgentState) -> AgentState:
         _has_tkt_pattern = "TKT-" in response.content
         _has_ticket_claim = any(phrase in _content_lower for phrase in _TICKET_CLAIM_PHRASES)
 
-        if _has_tkt_pattern or _has_ticket_claim:
-            # Check whether a REAL ticket was already created in this conversation
-            real_ticket_in_history = any(
-                isinstance(m, ToolMessage)
-                and m.name == "create_support_ticket"
-                for m in state["messages"]
-            )
+        # Check whether a REAL ticket was already created in this conversation
+        real_ticket_in_history = any(
+            isinstance(m, ToolMessage)
+            and m.name == "create_support_ticket"
+            for m in state["messages"]
+        )
 
-            if not real_ticket_in_history:
-                # Before creating a ticket, check if the complaint is about delivery
-                # and whether the delivery date has actually passed
-                support_order_id = new_order_id or state.get("order_id")
-                _delivery_complaint_keywords = [
-                    "never arrived", "not arrived", "hasn't arrived", "hasn't been delivered",
-                    "not delivered", "didn't arrive", "didn't receive", "never received",
-                    "missing", "delayed", "been weeks", "been days", "waiting for",
-                    "where is my", "still waiting", "not here yet",
-                ]
-                _is_delivery_complaint = any(
-                    kw in (last_msg.content.lower() if isinstance(last_msg, HumanMessage) else "")
-                    for kw in _delivery_complaint_keywords
+        if not real_ticket_in_history:
+            support_order_id = new_order_id or state.get("order_id")
+            _delivery_complaint_keywords = [
+                "never arrived", "not arrived", "hasn't arrived", "hasn't been delivered",
+                "not delivered", "didn't arrive", "didn't receive", "never received",
+                "missing", "delayed", "been weeks", "been days", "waiting for",
+                "where is my", "still waiting", "not here yet",
+            ]
+            _is_delivery_complaint = any(
+                kw in (last_msg.content.lower() if isinstance(last_msg, HumanMessage) else "")
+                for kw in _delivery_complaint_keywords
+            )
+            
+            delivery_date = None
+            today = date.today()
+            if _is_delivery_complaint:
+                delivery_date = _get_order_delivery_date_from_history(state["messages"], support_order_id)
+
+            # 1. If it's a delivery complaint AND the date has passed -> FORCE TICKET (even if LLM didn't claim one)
+            if _is_delivery_complaint and delivery_date and delivery_date < today:
+                logger.warning(
+                    "Guardrail E: Delivery date has passed — forcing ticket creation",
+                    extra={
+                        "event": "forced_overdue_delivery_ticket",
+                        "order_id": support_order_id,
+                        "expected_delivery": str(delivery_date),
+                        "today": str(today),
+                        "has_hallucinated_ticket": _has_tkt_pattern or _has_ticket_claim,
+                    },
+                )
+                support_customer_name = current_customer_name or "Customer"
+                response = AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "create_support_ticket",
+                            "args": {
+                                "order_id": support_order_id or "",
+                                "issue_type": "Complaint",
+                                "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                                "customer_name": support_customer_name,
+                            },
+                            "id": f"call_{uuid.uuid4().hex[:12]}",
+                            "type": "tool_call",
+                        }
+                    ],
+                    id=response.id,
+                )
+            
+            # 2. If it's a delivery complaint AND date has NOT passed BUT LLM claimed a ticket -> BLOCK TICKET
+            elif _is_delivery_complaint and delivery_date and delivery_date >= today and (_has_tkt_pattern or _has_ticket_claim):
+                logger.info(
+                    "Guardrail E: blocked ticket creation — delivery date not yet passed",
+                    extra={
+                        "event": "delivery_date_not_passed",
+                        "order_id": support_order_id,
+                        "expected_delivery": str(delivery_date),
+                        "today": str(today),
+                    },
+                )
+                response = AIMessage(
+                    content=(
+                        f"I understand your concern! However, after checking your order details, "
+                        f"your order {support_order_id or ''} is still within its expected delivery window. "
+                        f"The expected delivery date is **{delivery_date.strftime('%B %d, %Y')}**, "
+                        f"which {'is today' if delivery_date == today else 'has not passed yet'}. "
+                        f"Your order status is currently being processed and is on track. "
+                        f"If your order has not arrived after the expected delivery date, "
+                        f"please reach out and we will immediately create a support ticket for you."
+                    ),
+                    id=response.id,
                 )
 
-                # Check the expected delivery date from order history
-                delivery_date = _get_order_delivery_date_from_history(state["messages"], support_order_id)
-                today = date.today()
-
-                if _is_delivery_complaint and delivery_date and delivery_date >= today:
-                    # Delivery date has NOT passed — do NOT create a ticket
-                    # Replace the hallucinated response with a corrective one
-                    logger.info(
-                        "Guardrail E: blocked ticket creation — delivery date not yet passed",
-                        extra={
-                            "event": "delivery_date_not_passed",
-                            "order_id": support_order_id,
-                            "expected_delivery": str(delivery_date),
-                            "today": str(today),
-                        },
-                    )
-                    response = AIMessage(
-                        content=(
-                            f"I understand your concern! However, after checking your order details, "
-                            f"your order {support_order_id or ''} is still within its expected delivery window. "
-                            f"The expected delivery date is **{delivery_date.strftime('%B %d, %Y')}**, "
-                            f"which {'is today' if delivery_date == today else 'has not passed yet'}. "
-                            f"Your order status is currently being processed and is on track. "
-                            f"If your order has not arrived after the expected delivery date, "
-                            f"please reach out and we will immediately create a support ticket for you."
-                        ),
-                        id=response.id,
-                    )
-                else:
-                    # Delivery date has passed (or not a delivery complaint) — proceed with ticket
-                    logger.warning(
-                        "Intercepted hallucinated ticket claim — injecting create_support_ticket call",
-                        extra={
-                            "event": "hallucinated_ticket_intercepted",
-                            "has_tkt_pattern": _has_tkt_pattern,
-                            "has_ticket_claim": _has_ticket_claim,
-                            "delivery_date": str(delivery_date) if delivery_date else None,
-                            "response_snippet": (response.content or "")[:200],
-                        },
-                    )
-                    support_customer_name = current_customer_name or "Customer"
-                    response = AIMessage(
-                        content="",
-                        tool_calls=[
-                            {
-                                "name": "create_support_ticket",
-                                "args": {
-                                    "order_id": support_order_id or "",
-                                    "issue_type": "Complaint",
-                                    "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
-                                    "customer_name": support_customer_name,
-                                },
-                                "id": f"call_{uuid.uuid4().hex[:12]}",
-                                "type": "tool_call",
-                            }
-                        ],
-                        id=response.id,
-                    )
+            # 3. If it's NOT a delivery complaint (or missing date) BUT LLM claimed a ticket -> INJECT TICKET
+            elif (_has_tkt_pattern or _has_ticket_claim):
+                logger.warning(
+                    "Intercepted hallucinated ticket claim — injecting create_support_ticket call",
+                    extra={
+                        "event": "hallucinated_ticket_intercepted",
+                        "response_snippet": (response.content or "")[:200],
+                    },
+                )
+                support_customer_name = current_customer_name or "Customer"
+                response = AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "create_support_ticket",
+                            "args": {
+                                "order_id": support_order_id or "",
+                                "issue_type": "Complaint",
+                                "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                                "customer_name": support_customer_name,
+                            },
+                            "id": f"call_{uuid.uuid4().hex[:12]}",
+                            "type": "tool_call",
+                        }
+                    ],
+                    id=response.id,
+                )
 
     logger.info(
         "Agent node response details",
