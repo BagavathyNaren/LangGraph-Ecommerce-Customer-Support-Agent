@@ -827,33 +827,39 @@ def agent_node(state: AgentState) -> AgentState:
             # 1. If it's a delivery complaint AND the date has passed -> FORCE TICKET (even if LLM didn't claim one)
             if _is_delivery_complaint and delivery_date and delivery_date < today:
                 logger.warning(
-                    "Guardrail E: Delivery date has passed — forcing ticket creation",
+                    "Guardrail E: Delivery date has passed — forcing ticket creation directly",
                     extra={
-                        "event": "forced_overdue_delivery_ticket",
+                        "event": "forced_overdue_delivery_ticket_sync",
                         "order_id": support_order_id,
-                        "expected_delivery": str(delivery_date),
-                        "today": str(today),
-                        "has_hallucinated_ticket": _has_tkt_pattern or _has_ticket_claim,
                     },
                 )
                 support_customer_name = current_customer_name or "Customer"
-                response = AIMessage(
-                    content="",
-                    tool_calls=[
-                        {
-                            "name": "create_support_ticket",
-                            "args": {
-                                "order_id": support_order_id or "",
-                                "issue_type": "Complaint",
-                                "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
-                                "customer_name": support_customer_name,
-                            },
-                            "id": f"call_{uuid.uuid4().hex[:12]}",
-                            "type": "tool_call",
-                        }
-                    ],
-                    id=response.id,
+                from tools.real_tools import create_support_ticket
+                ticket_resp = create_support_ticket(
+                    order_id=support_order_id or "",
+                    issue_type="Complaint",
+                    message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                    customer_name=support_customer_name
                 )
+                import re as _re_tmp
+                ticket_match = _re_tmp.search(r"TKT-[0-9A-F]+", str(ticket_resp))
+                ticket_id = ticket_match.group(0) if ticket_match else "a new ticket"
+                
+                tc_id = f"call_{uuid.uuid4().hex[:12]}"
+                ai_msg_call = AIMessage(
+                    content="",
+                    tool_calls=[{"name": "create_support_ticket", "args": {"order_id": support_order_id or "", "issue_type": "Complaint", "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation", "customer_name": support_customer_name}, "id": tc_id, "type": "tool_call"}]
+                )
+                tool_msg = ToolMessage(content=str(ticket_resp), name="create_support_ticket", tool_call_id=tc_id)
+                final_msg = AIMessage(
+                    content=f"I deeply apologize for the delay. Since your expected delivery date has passed, I have immediately escalated this to our human support team. Your ticket ID is **{ticket_id}**. A representative will reach out to you shortly."
+                )
+                return {
+                    "messages": [ai_msg_call, tool_msg, final_msg] + messages_to_remove,
+                    "intent": new_intent,
+                    "order_id": new_order_id,
+                    "react_iterations": react_iterations,
+                }
             
             # 2. If it's a delivery complaint AND date has NOT passed BUT LLM claimed a ticket -> BLOCK TICKET
             elif _is_delivery_complaint and delivery_date and delivery_date >= today and (_has_tkt_pattern or _has_ticket_claim):
@@ -882,30 +888,38 @@ def agent_node(state: AgentState) -> AgentState:
             # 3. If it's NOT a delivery complaint (or missing date) BUT LLM claimed a ticket -> INJECT TICKET
             elif (_has_tkt_pattern or _has_ticket_claim):
                 logger.warning(
-                    "Intercepted hallucinated ticket claim — injecting create_support_ticket call",
+                    "Intercepted hallucinated ticket claim — injecting create_support_ticket call synchronously",
                     extra={
-                        "event": "hallucinated_ticket_intercepted",
-                        "response_snippet": (response.content or "")[:200],
+                        "event": "hallucinated_ticket_intercepted_sync",
                     },
                 )
                 support_customer_name = current_customer_name or "Customer"
-                response = AIMessage(
-                    content="",
-                    tool_calls=[
-                        {
-                            "name": "create_support_ticket",
-                            "args": {
-                                "order_id": support_order_id or "",
-                                "issue_type": "Complaint",
-                                "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
-                                "customer_name": support_customer_name,
-                            },
-                            "id": f"call_{uuid.uuid4().hex[:12]}",
-                            "type": "tool_call",
-                        }
-                    ],
-                    id=response.id,
+                from tools.real_tools import create_support_ticket
+                ticket_resp = create_support_ticket(
+                    order_id=support_order_id or "",
+                    issue_type="Complaint",
+                    message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
+                    customer_name=support_customer_name
                 )
+                import re as _re_tmp
+                ticket_match = _re_tmp.search(r"TKT-[0-9A-F]+", str(ticket_resp))
+                ticket_id = ticket_match.group(0) if ticket_match else "a new ticket"
+                
+                tc_id = f"call_{uuid.uuid4().hex[:12]}"
+                ai_msg_call = AIMessage(
+                    content="",
+                    tool_calls=[{"name": "create_support_ticket", "args": {"order_id": support_order_id or "", "issue_type": "Complaint", "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation", "customer_name": support_customer_name}, "id": tc_id, "type": "tool_call"}]
+                )
+                tool_msg = ToolMessage(content=str(ticket_resp), name="create_support_ticket", tool_call_id=tc_id)
+                final_msg = AIMessage(
+                    content=f"I have created a support ticket for your issue. Your ticket ID is **{ticket_id}**. A human agent will contact you soon."
+                )
+                return {
+                    "messages": [ai_msg_call, tool_msg, final_msg] + messages_to_remove,
+                    "intent": new_intent,
+                    "order_id": new_order_id,
+                    "react_iterations": react_iterations,
+                }
 
     logger.info(
         "Agent node response details",
