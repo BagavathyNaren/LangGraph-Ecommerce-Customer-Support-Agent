@@ -904,7 +904,7 @@ def agent_node(state: AgentState) -> AgentState:
                     },
                 )
                 support_customer_name = current_customer_name or "Customer"
-                from tools.real_tools import create_support_ticket
+                from tools.agent_tools import create_support_ticket
                 ticket_resp = create_support_ticket(
                     order_id=support_order_id or "",
                     issue_type="Complaint",
@@ -986,7 +986,7 @@ def agent_node(state: AgentState) -> AgentState:
                 logger.warning("ABSOLUTE FINAL ENFORCER: Forcing overdue ticket response")
                 if not _has_ticket_in_history:
                     support_customer_name = current_customer_name or "Customer"
-                    from tools.real_tools import create_support_ticket
+                    from tools.agent_tools import create_support_ticket
                     ticket_resp = create_support_ticket(
                         order_id=support_order_id or "",
                         issue_type="Complaint",
