@@ -203,6 +203,16 @@ def agent_node(state: AgentState) -> AgentState:
     else:
         # New user message — reset the counter
         react_iterations = 0
+        new_order_id = state.get("order_id")
+        
+    # Always try to extract order ID from the most recent human message
+    import re as _re_tmp
+    for m in reversed(state["messages"]):
+        if isinstance(m, HumanMessage):
+            match = _re_tmp.search(r"ORD\d{3,10}", m.content.upper())
+            if match:
+                new_order_id = match.group(0)
+            break
 
     # ═══ SAFETY CAP: Prevent infinite ReAct loops ═══
     if react_iterations >= MAX_REACT_ITERATIONS:
@@ -934,9 +944,30 @@ def agent_node(state: AgentState) -> AgentState:
         kw in (last_msg.content.lower() if isinstance(last_msg, HumanMessage) else "")
         for kw in _delivery_complaint_keywords
     )
+    
+    # --- DEBUG LOGGING ---
+    logger.info(
+        "ABSOLUTE FINAL ENFORCER EVALUATION",
+        extra={
+            "support_order_id": support_order_id,
+            "is_delivery_complaint": _is_delivery_complaint,
+            "last_msg_content": last_msg.content if isinstance(last_msg, HumanMessage) else None,
+        }
+    )
+    
     if _is_delivery_complaint:
         delivery_date = _get_order_delivery_date_from_history(state["messages"], support_order_id)
         today = date.today()
+        
+        logger.info(
+            "ABSOLUTE FINAL ENFORCER DATES",
+            extra={
+                "delivery_date": str(delivery_date) if delivery_date else None,
+                "today": str(today),
+                "is_overdue": (delivery_date < today) if delivery_date else False,
+            }
+        )
+        
         if delivery_date and delivery_date < today:
             _has_tool = any(tc["name"] == "create_support_ticket" for tc in response.tool_calls)
             _has_ticket_in_history = False
