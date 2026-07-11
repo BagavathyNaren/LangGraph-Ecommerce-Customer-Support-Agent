@@ -239,7 +239,9 @@ def agent_node(state: AgentState) -> AgentState:
                 m = state["messages"][i]
                 messages_to_remove.append(RemoveMessage(id=m.id))
 
-    messages = [SystemMessage(content=AGENT_SYSTEM_PROMPT)] + state["messages"]
+    from datetime import datetime
+    dynamic_prompt = AGENT_SYSTEM_PROMPT + f"\n\nCRITICAL CONTEXT: Today's current date is {datetime.now().strftime('%B %d, %Y')}."
+    messages = [SystemMessage(content=dynamic_prompt)] + state["messages"]
     response = agent_llm.invoke(messages)
 
     # ── Always resolve last_msg and current_customer_name first ──
