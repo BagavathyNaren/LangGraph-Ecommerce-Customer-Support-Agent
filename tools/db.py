@@ -49,10 +49,10 @@ def get_pool() -> ConnectionPool:
         conn_info = get_db_config()
         _pool = ConnectionPool(
             conn_info,
-            min_size=1,  # Keep 1 warm connection on the persistent min-instance (eliminates cold-start DB latency)
-            max_size=3,  # 3 connections per instance: 1 for checkpointer, 1 for tools, 1 buffer
+            min_size=2,  # Keep 2 warm connections (eliminates cold-start DB latency)
+            max_size=20,  # 20 connections per instance for checkpointer, tool calls, and concurrent requests
             open=True,
-            max_idle=30,  # Keep idle connections alive for 30s on the warm instance
+            max_idle=300,  # Keep idle connections alive for 5 minutes
             reconnect_timeout=10,  # Fail fast on connection loss
             check=ConnectionPool.check_connection,  # validates connection is alive before returning
             kwargs={"autocommit": True, "connect_timeout": 5},  # Short timeout for faster failures
