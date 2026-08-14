@@ -1,26 +1,16 @@
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from graph.edges import route_escalation, should_continue
 from graph.nodes import agent_node, escalate, escalation_check, tool_node
 from graph.state import AgentState
 from logger import get_logger
-from tools.db import get_pool
 
 logger = get_logger("graph_builder")
 
 
 def build_graph():
-    pool = get_pool()
-
-    checkpointer = PostgresSaver(pool)
-    try:
-        checkpointer.setup()
-    except Exception as e:
-        logger.warning(
-            f"Checkpointer setup warning: {e}. "
-            "Application startup will continue. If tables are already initialized, queries will succeed."
-        )
+    checkpointer = MemorySaver()
 
     graph = StateGraph(AgentState)
 
