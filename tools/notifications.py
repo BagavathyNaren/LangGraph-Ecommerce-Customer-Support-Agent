@@ -110,7 +110,28 @@ class GmailProvider(EmailProvider):
             msg["Subject"] = subject
             msg["From"] = f"E-Commerce Support <{sender_email}>"
             msg["To"] = to_email
+            msg["Reply-To"] = sender_email
+
+            # Attach plain text
             msg.attach(MIMEText(body, "plain"))
+
+            # Attach HTML version for spam protection and clean presentation
+            html_body = body.replace("\n", "<br>")
+            html_content = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b;">
+              <div style="max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+                <h2 style="color: #2563eb; margin-top: 0;">E-Commerce Support Notification</h2>
+                <div style="background-color: #f8fafc; padding: 16px; border-radius: 6px; border-left: 4px solid #2563eb; font-size: 15px;">
+                  {html_body}
+                </div>
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+                <p style="font-size: 12px; color: #64748b; margin: 0;">This is an automated confirmation from E-Commerce Support Agent.</p>
+              </div>
+            </body>
+            </html>
+            """
+            msg.attach(MIMEText(html_content, "html"))
 
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
                 server.login(sender_email, app_password)
