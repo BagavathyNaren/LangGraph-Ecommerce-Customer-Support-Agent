@@ -1,6 +1,9 @@
+import json
 import re as _re
 import uuid
 from datetime import date, datetime
+
+from langchain_core.messages import ToolMessage
 
 from tools.real_tools import create_support_ticket as _real_create_support_ticket
 
