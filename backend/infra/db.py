@@ -2,7 +2,7 @@ import os
 
 from psycopg_pool import ConnectionPool
 
-from logger import get_logger
+from infra.logger import get_logger
 
 logger = get_logger("db-pool")
 

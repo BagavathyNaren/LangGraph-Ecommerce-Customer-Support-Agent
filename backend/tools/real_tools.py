@@ -4,9 +4,9 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from logger import get_logger
-from tools.analytics import log_event
-from tools.db import get_connection
+from infra.logger import get_logger
+from domain.analytics import log_event
+from infra.db import get_connection
 
 
 def _create_retry_session(retries=3, backoff_factor=0.3, status_forcelist=(500, 502, 503, 504)):
@@ -162,7 +162,7 @@ def initiate_return(order_id: str, reason: str) -> dict:
                 cust_row = cur.fetchone()
                 if cust_row:
                     email, name, telegram_id = cust_row
-                    from tools.notifications import send_email, send_telegram
+                    from infra.notifications import send_email, send_telegram
 
                     if email:
                         send_email(
@@ -216,7 +216,7 @@ def cancel_order(order_id: str) -> dict:
                 cust_row = cur.fetchone()
                 if cust_row:
                     email, name, telegram_id = cust_row
-                    from tools.notifications import send_email, send_telegram
+                    from infra.notifications import send_email, send_telegram
 
                     if email:
                         send_email(
@@ -266,7 +266,7 @@ def update_order_from_webhook(order_id: str, new_status: str, carrier: str = Non
 
                 if cust_row:
                     email, name, telegram_id = cust_row
-                    from tools.notifications import send_email, send_telegram
+                    from infra.notifications import send_email, send_telegram
 
                     carrier_text = f" via {carrier}" if carrier else ""
 
@@ -409,7 +409,7 @@ def register_new_customer(name: str, email: str, phone_number: str = None, count
                 # Send email notification after successful registration
                 if email:
                     try:
-                        from tools.notifications import send_email
+                        from infra.notifications import send_email
 
                         send_email(
                             to_email=email,
@@ -943,8 +943,6 @@ def fetch_retailer_data(platform: str, query: str, country: str = "India") -> di
     # 5. NO-KEY STATIC DB CATALOG MATCH FALLBACK
     # If all online search fails or keys are missing, search local DB products
     try:
-        from tools.real_tools import search_products
-
         db_res = search_products(query, country)
         if db_res.get("success"):
             results = []
@@ -1137,7 +1135,7 @@ def place_new_order(
 
                 # Send email and Telegram notification after placing order successfully
                 try:
-                    from tools.notifications import send_email, send_telegram
+                    from infra.notifications import send_email, send_telegram
 
                     price_str = price if price else (f"₹{price_float:,.2f}" if price_float else "Unknown")
                     if email:
@@ -1295,7 +1293,7 @@ def create_support_ticket(
                     cust_row = cur.fetchone()
                     if cust_row:
                         email, name, telegram_id = cust_row
-                        from tools.notifications import send_email, send_telegram
+                        from infra.notifications import send_email, send_telegram
 
                         if email:
                             send_email(

@@ -25,7 +25,7 @@ jobs:
         run: pip install ruff
 
       - name: Run Ruff linter
-        run: ruff check . > ruff_output.log || true
+        run: ruff check backend/ > ruff_output.log || true
 
       - name: Show Ruff linter output on failure
         if: always()
@@ -52,7 +52,7 @@ jobs:
             }
 
       - name: Run Ruff format check
-        run: ruff format --check .
+        run: ruff format --check backend/
 
   test:
     name: Backend Unit Tests (pytest)
@@ -92,6 +92,7 @@ jobs:
           OPENAI_API_KEY: "sk-dummy-key-for-testing"
           TAVILY_API_KEY: "tvly-dummy-key"
           SERPER_API_KEY: "serper-dummy-key"
+          PYTHONPATH: backend
         run: |
           python -m pytest tests/test_nodes.py tests/test_real_tools.py --collect-only 2>&1 || true
 
@@ -101,6 +102,7 @@ jobs:
           OPENAI_API_KEY: "sk-dummy-key-for-testing"
           TAVILY_API_KEY: "tvly-dummy-key"
           SERPER_API_KEY: "serper-dummy-key"
+          PYTHONPATH: backend
         run: |
           python -m pytest tests/test_nodes.py tests/test_real_tools.py -v --tb=short
 

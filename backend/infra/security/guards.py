@@ -3,7 +3,7 @@ import re
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 
-from logger import get_logger
+from infra.logger import get_logger
 
 logger = get_logger("guardrails")
 

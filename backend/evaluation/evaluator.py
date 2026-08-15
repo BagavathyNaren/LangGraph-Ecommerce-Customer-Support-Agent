@@ -2,7 +2,7 @@ import time
 
 from langchain_core.messages import HumanMessage
 
-from logger import get_logger
+from infra.logger import get_logger
 
 logger = get_logger("evaluator")
 

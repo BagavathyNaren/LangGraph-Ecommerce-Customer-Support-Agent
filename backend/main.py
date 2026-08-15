@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from security.env_validator import validate_env
+from infra.security.env_validator import validate_env
 
 is_configured = True
 try:
@@ -23,16 +23,15 @@ from contextlib import asynccontextmanager
 import psycopg
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, Field, field_validator
 
-from cache.redis_cache import get_cached_response, set_cached_response
+from infra.cache.redis_cache import get_cached_response, set_cached_response
 from evaluation.evaluator import run_evaluation
-from graph.graph_builder import build_graph
-from logger import get_logger
-from security.guards import validate_input, validate_output
-from tools.analytics import init_analytics_db, log_event
+from agent.graph_builder import build_graph
+from infra.logger import get_logger
+from infra.security.guards import validate_input, validate_output
+from domain.analytics import init_analytics_db, log_event
 
 os.environ["LANGCHAIN_TRACING_V2"] = os.environ.get("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGCHAIN_API_KEY", "")
@@ -74,7 +73,7 @@ async def lifespan(app: FastAPI):
     init_analytics_db()
     # Self-healing DB migration: ensure phone_number column exists (safe for GCP migration)
     try:
-        from tools.db import get_connection
+        from infra.db import get_connection
 
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -300,7 +299,7 @@ HTTP_TIMEOUT = 60  # seconds
 
 
 @app.get("/tts")
-def tts_proxy(text: str):
+def generate_speech_audio(text: str):
     """
     Proxy TTS audio through the backend using OpenAI's TTS API.
     Uses the 'echo' voice (clear, warm male) and tts-1 for low-latency, loud and clear output.
@@ -332,7 +331,7 @@ def tts_proxy(text: str):
 
 
 @app.get("/cron/process-etas")
-def process_etas(secret: str = None):
+def process_due_order_updates(secret: str = None):
     """
     Cron job endpoint to auto-complete old refunds and deliver old orders.
     Called by GCP Cloud Scheduler.
@@ -342,7 +341,7 @@ def process_etas(secret: str = None):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     try:
-        from tools.db import get_connection
+        from infra.db import get_connection
 
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -373,13 +372,13 @@ def process_etas(secret: str = None):
 
 
 @app.get("/")
-def root():
+def get_service_overview():
     return {"status": "ok", "message": "Backend API is running. Frontend is served via Firebase Hosting."}
 
 
 @app.get("/health")
-def health():
-    from cache.redis_cache import r
+def get_service_health():
+    from infra.cache.redis_cache import r
 
     try:
         db_url = os.environ.get("DATABASE_URL", "")
@@ -418,7 +417,7 @@ def health():
 
 
 @app.post("/chat")
-def chat(request: ChatRequest, background_tasks: BackgroundTasks):
+def create_chat_response(request: ChatRequest, background_tasks: BackgroundTasks):
     start = time.time()
     request_id = str(uuid.uuid4())[:8]
 
@@ -492,7 +491,7 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         if not pii_detected and not result.get("escalated", False) and not is_analytics_query and not is_cutoff_intro:
             set_cached_response(validated_message, response_data, request.thread_id)
 
-        from tools.logging_tools import log_conversation
+        from infra.logging_tools import log_conversation
 
         background_tasks.add_task(
             log_conversation,
@@ -560,7 +559,7 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
 
 
 @app.post("/chat/stream")
-async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
+async def stream_chat_response(request: ChatRequest, background_tasks: BackgroundTasks):
     message = request.message
     thread_id = request.thread_id
     try:
@@ -614,7 +613,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                         yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
                         await asyncio.sleep(0.04)
                     yield f"data: {json.dumps({'done': True, 'intent': cached.get('intent'), 'escalated': cached.get('escalated', False), 'order_id': cached.get('order_id'), 'cache_hit': True})}\n\n"
-                    from tools.logging_tools import log_conversation
+                    from infra.logging_tools import log_conversation
 
                     background_tasks.add_task(
                         log_conversation,
@@ -665,7 +664,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 },
             )
 
-            from tools.logging_tools import log_conversation
+            from infra.logging_tools import log_conversation
 
             background_tasks.add_task(
                 log_conversation, thread_id, validated_message, response, result.get("intent"), result.get("order_id")
@@ -700,13 +699,13 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
 
 
 @app.post("/webhooks/shipping-update")
-def shipping_webhook(payload: WebhookPayload, background_tasks: BackgroundTasks):
+def handle_shipping_update_webhook(payload: WebhookPayload, background_tasks: BackgroundTasks):
     expected_secret = os.environ.get("WEBHOOK_SECRET", "dev-secret-123")
     if payload.secret != expected_secret:
         logger.warning("Webhook auth failed", extra={"event": "webhook_auth_failure"})
         raise HTTPException(status_code=403, detail="Forbidden: invalid secret")
 
-    from tools.real_tools import update_order_from_webhook
+    from tools.real_tools import update_order_from_webhook  # tools/ shim re-exports from domain/
 
     result = update_order_from_webhook(payload.order_id, payload.status, payload.carrier)
 
@@ -725,7 +724,7 @@ def shipping_webhook(payload: WebhookPayload, background_tasks: BackgroundTasks)
             raise HTTPException(status_code=500, detail=error_msg)
 
     # Log to analytics
-    from tools.analytics import log_event
+    from domain.analytics import log_event
 
     background_tasks.add_task(
         log_event,
@@ -743,7 +742,7 @@ def shipping_webhook(payload: WebhookPayload, background_tasks: BackgroundTasks)
 
 
 @app.post("/evaluate")
-def evaluate(x_api_key: str = Header(None)):
+def run_agent_evaluation(x_api_key: str = Header(None)):
     expected_key = os.environ.get("EVAL_API_KEY", "")
     if not expected_key or x_api_key != expected_key:
         raise HTTPException(status_code=403, detail="Forbidden: invalid or missing API key.")

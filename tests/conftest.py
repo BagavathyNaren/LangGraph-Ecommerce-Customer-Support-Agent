@@ -2,6 +2,9 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 
+# Add backend/ to path so tests can import backend modules directly
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+
 
 # 1. Globally mock psycopg and psycopg_pool before any other project imports
 class ConnectionPool:
@@ -36,8 +39,9 @@ sys.modules["psycopg.rows"] = MagicMock()
 sys.modules["psycopg.types"] = MagicMock()
 sys.modules["psycopg.types.json"] = MagicMock()
 
-# Now import tools.db and override its functions at module load time!
-import tools.db
+# Now import infra.db and override its functions at module load time!
+import infra.db as _infra_db
+import tools.db  # shim for backward compat — also override it
 
 # Global connection mocks
 mock_conn = MagicMock()
@@ -50,9 +54,11 @@ mock_conn.__enter__.return_value = mock_conn
 mock_connection_ctx = MagicMock()
 mock_connection_ctx.__enter__.return_value = mock_conn
 
-# Assign the module overrides
+# Assign the module overrides (patch both old tools.db and new infra.db paths)
 tools.db.get_connection = lambda: mock_connection_ctx
 tools.db.get_pool = lambda: MagicMock()
+_infra_db.get_connection = lambda: mock_connection_ctx
+_infra_db.get_pool = lambda: MagicMock()
 
 import pytest
 

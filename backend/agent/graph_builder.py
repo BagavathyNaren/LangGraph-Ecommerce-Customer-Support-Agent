@@ -1,10 +1,10 @@
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
-from graph.edges import route_escalation, should_continue
-from graph.nodes import agent_node, escalate, escalation_check, tool_node
-from graph.state import AgentState
-from logger import get_logger
+from agent.edges import route_after_agent_response, route_after_escalation_review
+from agent.nodes import agent_node, escalate, escalation_check, tool_node
+from agent.state import AgentState
+from infra.logger import get_logger
 
 logger = get_logger("graph_builder")
 
@@ -24,13 +24,17 @@ def build_graph():
     graph.set_entry_point("agent")
 
     # After agent: call tools or move to escalation check
-    graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "escalation_check": "escalation_check"})
+    graph.add_conditional_edges(
+        "agent", route_after_agent_response, {"tools": "tools", "escalation_check": "escalation_check"}
+    )
 
     # After tools: loop back to agent (ReAct loop)
     graph.add_edge("tools", "agent")
 
     # After escalation check: escalate or end
-    graph.add_conditional_edges("escalation_check", route_escalation, {"escalate": "escalate", "end": END})
+    graph.add_conditional_edges(
+        "escalation_check", route_after_escalation_review, {"escalate": "escalate", "end": END}
+    )
     graph.add_edge("escalate", END)
 
     return graph.compile(checkpointer=checkpointer)

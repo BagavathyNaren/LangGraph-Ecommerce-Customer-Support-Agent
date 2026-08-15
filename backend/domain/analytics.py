@@ -1,7 +1,7 @@
 import json
 
-from logger import get_logger
-from tools.db import get_connection
+from infra.logger import get_logger
+from infra.db import get_connection
 
 logger = get_logger("analytics")
 

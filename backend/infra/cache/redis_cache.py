@@ -4,7 +4,7 @@ import os
 
 import redis
 
-from logger import get_logger
+from infra.logger import get_logger
 
 logger = get_logger("cache")
 

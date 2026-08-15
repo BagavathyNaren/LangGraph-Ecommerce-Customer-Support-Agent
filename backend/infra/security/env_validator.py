@@ -2,7 +2,7 @@ import os
 
 from pydantic import BaseModel, Field, model_validator
 
-from logger import get_logger
+from infra.logger import get_logger
 
 logger = get_logger("env-validator")
 

@@ -6,8 +6,8 @@ from datetime import date, datetime
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 
-from graph.state import AgentState
-from logger import get_logger
+from agent.state import AgentState
+from infra.logger import get_logger
 from tools.agent_tools import AGENT_TOOLS
 from tools.real_tools import create_support_ticket as _real_create_support_ticket
 
@@ -1028,7 +1028,7 @@ def tool_node(state: AgentState) -> AgentState:
     import time
     from concurrent.futures import ThreadPoolExecutor
 
-    from cache.redis_cache import get_cached_tool_result, set_cached_tool_result
+    from infra.cache.redis_cache import get_cached_tool_result, set_cached_tool_result
 
     last_message = state["messages"][-1]
     tool_map = {t.name: t for t in AGENT_TOOLS}
