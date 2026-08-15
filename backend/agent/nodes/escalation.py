@@ -3,7 +3,7 @@ import re as _re
 import uuid
 from datetime import date
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from agent.nodes.guardrails.helpers import (
     _create_ticket_sync,
