@@ -47,3 +47,44 @@ def log_event(
             logger.info(f"Logged event: {event_type}")
     except Exception as e:
         logger.error(f"Failed to log event {event_type}: {e}")
+
+
+def get_analytics_summary() -> dict:
+    """Fetch a summary of business analytics from the database."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                # 1. Count directly from support_tickets table (source of truth)
+                cur.execute("SELECT COUNT(*) FROM support_tickets")
+                total_tickets = int(cur.fetchone()[0] or 0)
+
+                # 2. Count directly from refunds table (source of truth)
+                cur.execute("SELECT COUNT(*) FROM refunds")
+                total_returns = int(cur.fetchone()[0] or 0)
+
+                # 3. Average Latency from analytics_events
+                cur.execute("SELECT AVG(duration_ms) FROM analytics_events WHERE duration_ms IS NOT NULL")
+                avg_latency_raw = cur.fetchone()[0]
+                avg_latency = round(float(avg_latency_raw)) if avg_latency_raw is not None else 0
+
+                # 4. Most Common Intent from analytics_events
+                cur.execute("""
+                    SELECT intent, COUNT(*) as count
+                    FROM analytics_events
+                    WHERE intent IS NOT NULL
+                    GROUP BY intent
+                    ORDER BY count DESC
+                    LIMIT 1
+                """)
+                top_intent_row = cur.fetchone()
+                top_intent = str(top_intent_row[0]) if top_intent_row else "N/A"
+
+                return {
+                    "total_tickets": total_tickets,
+                    "total_returns": total_returns,
+                    "avg_response_time_ms": avg_latency,
+                    "most_common_intent": top_intent,
+                }
+    except Exception as e:
+        logger.error(f"Analytics query failed: {e}")
+        return {"error": "Could not retrieve analytics data."}

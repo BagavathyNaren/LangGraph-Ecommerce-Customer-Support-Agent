@@ -36,7 +36,7 @@ graph TD
     %% Data & Persistence Layer
     Agent_Brain --> DB[(🐘 GCP PostgreSQL e2-micro)]
     subgraph Persistence_Monitoring [Data Stack]
-        DB --> CHK[💾 PostgresSaver Checkpointer]
+        GRAPH --> CHK[💾 MemorySaver In-Memory State]
         DB --> BUS[📦 Business Data: Orders/Tickets]
         DB --> LOG[📝 Conversation Logs]
     end
@@ -64,7 +64,7 @@ graph TD
 ### 3. **LangGraph State Machine (The "Brain")**
 *   **ReAct Pattern:** The agent follows a **Reasoning + Acting** loop. It thinks, decides which tool to call, processes the result, and repeats until the task is done.
 *   **State Management:** The `AgentState` object tracks conversation history, detected intents, order IDs, and escalation triggers (like user anger levels) across the entire session.
-*   **Checkpointer:** Uses `PostgresSaver` to save every single step of the graph to GCP PostgreSQL (e2-micro VM). If the server crashes, the agent resumes exactly where it left off.
+*   **Checkpointer:** Uses `MemorySaver` for in-memory graph state persistence across ReAct loop turns, eliminating database connection pool overhead during high-traffic bursts. Conversation turns are persisted asynchronously to `conversation_logs` in PostgreSQL.
 
 ### 4. **Persistence & Data Stack**
 *   **GCP PostgreSQL (e2-micro):** A self-hosted PostgreSQL instance on a GCP e2-micro VM hosting:

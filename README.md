@@ -10,8 +10,8 @@ An advanced, voice-enabled AI Customer Support Agent built with LangGraph, FastA
 
 ## 🌟 Live Environments
 
-- **Frontend (Firebase Hosting)**: [https://ecommerce-agent-f3a74.web.app](https://ecommerce-agent-f3a74.web.app)
-- **Backend (GCP Cloud Run)**: *[Your Cloud Run URL (e.g. asia-south1)]*
+- **Frontend (Firebase Hosting)**: [https://my-agentic-lab.web.app](https://my-agentic-lab.web.app)
+- **Backend (GCP Cloud Run)**: [https://ecommerce-support-agent-93337753347.asia-south1.run.app](https://ecommerce-support-agent-93337753347.asia-south1.run.app)
 
 ---
 

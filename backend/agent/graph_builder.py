@@ -8,6 +8,17 @@ from infra.logger import get_logger
 
 logger = get_logger("graph_builder")
 
+_compiled_graph = None
+
+
+def get_graph():
+    return _compiled_graph
+
+
+def set_graph(g):
+    global _compiled_graph
+    _compiled_graph = g
+
 
 def build_graph():
     checkpointer = MemorySaver()
@@ -37,4 +48,6 @@ def build_graph():
     )
     graph.add_edge("escalate", END)
 
-    return graph.compile(checkpointer=checkpointer)
+    compiled = graph.compile(checkpointer=checkpointer)
+    set_graph(compiled)
+    return compiled

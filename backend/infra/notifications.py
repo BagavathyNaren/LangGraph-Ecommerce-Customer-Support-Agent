@@ -19,7 +19,7 @@ from email.mime.text import MIMEText
 
 import requests
 
-from logger import get_logger
+from infra.logger import get_logger
 
 logger = get_logger("notifications")
 
