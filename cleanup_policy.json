@@ -1,0 +1,21 @@
+[
+  {
+    "name": "delete-old-revisions",
+    "action": {
+      "type": "Delete"
+    },
+    "condition": {
+      "tagState": "any",
+      "olderThan": "14d"
+    }
+  },
+  {
+    "name": "keep-latest-revisions",
+    "action": {
+      "type": "Keep"
+    },
+    "mostRecentVersions": {
+      "keepCount": 3
+    }
+  }
+]
