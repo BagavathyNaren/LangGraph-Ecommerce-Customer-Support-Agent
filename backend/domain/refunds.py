@@ -1,6 +1,7 @@
 import random
 import uuid
 from domain.analytics import log_event
+from domain.rules import USER_FRIENDLY_DB_ERROR
 from infra.db import get_connection
 from infra.logger import get_logger
 from infra.notifications import send_email, send_telegram

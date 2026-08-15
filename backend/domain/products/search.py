@@ -1,6 +1,7 @@
 import os
 import re
 import urllib.parse
+from domain.rules import USER_FRIENDLY_DB_ERROR
 from infra.db import get_connection
 from infra.http import _session
 from infra.logger import get_logger

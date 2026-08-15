@@ -13,6 +13,7 @@ from domain.products.pricing import (
 )
 from domain.products.search import fetch_retailer_data, search_products
 from domain.refunds import get_refund_status, initiate_return
+from domain.rules import SUPPORTED_COUNTRIES, USER_FRIENDLY_DB_ERROR
 from domain.tickets import create_support_ticket
 from infra.http import _create_retry_session, _session
 
@@ -36,4 +37,6 @@ __all__ = [
     "search_knowledge_base",
     "create_support_ticket",
     "get_analytics_summary",
+    "USER_FRIENDLY_DB_ERROR",
+    "SUPPORTED_COUNTRIES",
 ]
