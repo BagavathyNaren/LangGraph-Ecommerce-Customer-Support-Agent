@@ -1,0 +1,9 @@
+{
+  "slash_commands": [
+    {
+      "command": "/refund",
+      "workflow": "handle_customer_query",
+      "description": "Quickly handle refund requests using policy and implementation files."
+    }
+  ]
+}

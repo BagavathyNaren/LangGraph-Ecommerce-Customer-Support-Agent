@@ -81,7 +81,18 @@ npm run dev
 ```
 
 ### 4. Deploying
-All pushes to the `main` branch are automatically deployed by GitHub Actions. Ensure you have the required secrets configured as documented in `SECRETS.md`.
+All pushes to the `main` branch are automatically deployed by GitHub Actions. Ensure you have the required secrets configured as documented in [`docs/SECRETS.md`](./docs/SECRETS.md).
 
 ---
-*Built with ❤️ utilizing the latest agentic frameworks.*
+
+## 📚 Documentation
+Detailed technical documentation and architecture blueprints are located in the [`docs/`](./docs/README.md) directory:
+- [System Architecture Blueprint](./docs/Blueprint.md)
+- [Production Cloud Architecture](./docs/PRODUCTION_ARCHITECTURE.md)
+- [ReAct State Machine Design](./docs/DESIGN.md)
+- [Secrets & Environment Variables](./docs/SECRETS.md)
+- [Testing Guide](./docs/testing_guide.md)
+- [Manual UI Testing Scenarios](./docs/manual_ui_testing_guide.md)
+
+---
+*Built with ❤️ utilizing the latest agentic frameworks.*

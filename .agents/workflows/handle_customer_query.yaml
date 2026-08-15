@@ -1,0 +1,8 @@
+name: handle_customer_query
+description: Processes customer requests using the logic.
+context:
+  - docs/GEMINI.md          # Loads your agent personality/rules
+  - docs/implementation.md  # Loads your technical constraints/db schema
+steps:
+  - prompt: "Review the customer query provided in the chat input. Refer to docs/GEMINI.md for tone and docs/implementation.md for order status lookup logic. Provide a concise response."
+  - model: flash       # Uses the fast model to keep the session light

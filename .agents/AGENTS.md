@@ -9,10 +9,10 @@ These rules govern all AI agent behavior when working on this project. They are 
 ### Rule 1: Source-of-Truth Workflow
 
 Before starting ANY task:
-1. Read **GEMINI.md** — for strict constraints, deployment commands, and commitments.
-2. Read **Blueprint.md** — for the master project roadmap and current phase status.
-3. Read **PRODUCTION_ARCHITECTURE.md** — for the system architecture and component boundaries.
-4. Read **implementation.md** — for the current execution context and active step.
+1. Read **docs/GEMINI.md** — for strict constraints, deployment commands, and commitments.
+2. Read **docs/Blueprint.md** — for the master project roadmap and current phase status.
+3. Read **docs/PRODUCTION_ARCHITECTURE.md** — for the system architecture and component boundaries.
+4. Read **docs/implementation.md** — for the current execution context and active step.
 
 Never deviate from these files. If a conflict arises, ask the user.
 
