@@ -20,7 +20,7 @@ from tools.real_tools import create_support_ticket as _real_create_support_ticke
 
 logger = get_logger("ecommerce-agent")
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True, request_timeout=30)
+llm = ChatOpenAI(model="gpt-5-mini", temperature=0, streaming=True, request_timeout=30)
 agent_llm = llm.bind_tools(AGENT_TOOLS)
 
 MAX_REACT_ITERATIONS = 15  # Hard safety cap to prevent infinite loops

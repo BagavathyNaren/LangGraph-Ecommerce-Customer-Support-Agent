@@ -27,7 +27,7 @@ graph TD
     CACHE --> GRAPH[🧠 LangGraph State Machine]
     
     subgraph Agent_Brain [LangGraph ReAct Pattern]
-        GRAPH --> NODE_A[🤖 Agent Node: GPT-4o-mini]
+        GRAPH --> NODE_A[🤖 Agent Node: GPT-5-mini]
         NODE_A --> NODE_T[🔧 Tool Node: Business Logic]
         NODE_T --> NODE_A
         GRAPH --> NODE_E[⚖️ Escalation Logic]
@@ -106,7 +106,7 @@ graph TD
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | ✅ | GCP e2-micro PostgreSQL connection string (`postgresql://user:pass@<IP>:5432/dbname`) |
-| `OPENAI_API_KEY` | ✅ | GPT-4o-mini API access |
+| `OPENAI_API_KEY` | ✅ | GPT-5-mini API access |
 | `REDIS_URL` | ✅ | Upstash Redis for caching |
 | `LANGCHAIN_API_KEY` | ✅ | LangSmith Authentication |
 | `LANGCHAIN_PROJECT` | ✅ | LangSmith Project Name |
