@@ -159,7 +159,9 @@ def agent_node(state: AgentState) -> AgentState:
             "austria",
             "new zealand",
             "south africa",
-            "korea",
+            "north korea",
+            "pakistan",
+            "bangladesh",
         ]
         detected_unsupported = None
         for uc in unsupported_countries:
@@ -691,8 +693,15 @@ def agent_node(state: AgentState) -> AgentState:
                     customer_name=support_customer_name
                 )
                 import re as _re_tmp
-                ticket_match = _re_tmp.search(r"TKT-[0-9A-F]+", str(ticket_resp))
-                ticket_id = ticket_match.group(0) if ticket_match else "a new ticket"
+                ticket_id = (
+                    ticket_resp.get("ticket_id")
+                    if isinstance(ticket_resp, dict)
+                    else None
+                ) or (
+                    _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp)).group(0)
+                    if _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
+                    else "a new ticket"
+                )
                 
                 tc_id = f"call_{uuid.uuid4().hex[:12]}"
                 ai_msg_call = AIMessage(
@@ -750,8 +759,15 @@ def agent_node(state: AgentState) -> AgentState:
                     customer_name=support_customer_name
                 )
                 import re as _re_tmp
-                ticket_match = _re_tmp.search(r"TKT-[0-9A-F]+", str(ticket_resp))
-                ticket_id = ticket_match.group(0) if ticket_match else "a new ticket"
+                ticket_id = (
+                    ticket_resp.get("ticket_id")
+                    if isinstance(ticket_resp, dict)
+                    else None
+                ) or (
+                    _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp)).group(0)
+                    if _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
+                    else "a new ticket"
+                )
                 
                 tc_id = f"call_{uuid.uuid4().hex[:12]}"
                 ai_msg_call = AIMessage(
@@ -811,9 +827,12 @@ def agent_node(state: AgentState) -> AgentState:
                         message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
                         customer_name=support_customer_name
                     )
-                    match = _re_tmp.search(r"TKT-[0-9A-F]+", str(ticket_resp))
-                    if match:
-                        _ticket_id = match.group(0)
+                    match = _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
+                    _ticket_id = (
+                        ticket_resp.get("ticket_id")
+                        if isinstance(ticket_resp, dict)
+                        else None
+                    ) or (match.group(0) if match else "a new ticket")
                         
                     tc_id = f"call_{uuid.uuid4().hex[:12]}"
                     ai_msg_call = AIMessage(content="", tool_calls=[{"name": "create_support_ticket", "args": {"order_id": support_order_id or "", "issue_type": "Complaint", "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation", "customer_name": support_customer_name}, "id": tc_id, "type": "tool_call"}])

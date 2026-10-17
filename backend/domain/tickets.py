@@ -151,6 +151,7 @@ def create_support_ticket(
                 return {
                     "success": True,
                     "message": "A human agent will review your case and contact you within 2 hours.",
+                    "ticket_id": ticket_id,
                 }
     except Exception as e:
         logger.error(
