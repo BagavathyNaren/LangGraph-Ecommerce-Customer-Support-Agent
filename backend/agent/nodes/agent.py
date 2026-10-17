@@ -52,6 +52,11 @@ def agent_node(state: AgentState) -> AgentState:
             match = _re_tmp.search(r"ORD\d{3,10}", m.content.upper())
             if match:
                 new_order_id = match.group(0)
+            elif any(phrase in m.content.lower() for phrase in (
+                "new order", "place an order", "place a new order", "want to buy", "buy a",
+                "search for", "order from", "catalog", "recommend"
+            )):
+                new_order_id = None
             break
 
     # ═══ SAFETY CAP: Prevent infinite ReAct loops ═══
@@ -660,6 +665,18 @@ def agent_node(state: AgentState) -> AgentState:
 
         if not real_ticket_in_history:
             support_order_id = new_order_id or state.get("order_id")
+            support_customer_name = current_customer_name
+            if not support_customer_name:
+                for m in reversed(state["messages"]):
+                    if isinstance(m, ToolMessage) and (getattr(m, "name", "") == "lookup_customer_orders" or '"customer"' in (m.content or "")):
+                        try:
+                            parsed_c = json.loads(m.content)
+                            if isinstance(parsed_c, dict) and parsed_c.get("customer"):
+                                support_customer_name = parsed_c["customer"]
+                                break
+                        except Exception:
+                            pass
+
             _delivery_complaint_keywords = [
                 "never arrived", "not arrived", "hasn't arrived", "hasn't been delivered",
                 "not delivered", "didn't arrive", "didn't receive", "never received",
@@ -685,7 +702,6 @@ def agent_node(state: AgentState) -> AgentState:
                         "order_id": support_order_id,
                     },
                 )
-                support_customer_name = current_customer_name or "Customer"
                 ticket_resp = _create_ticket_sync(
                     order_id=support_order_id or "",
                     issue_type="Complaint",
@@ -751,7 +767,6 @@ def agent_node(state: AgentState) -> AgentState:
                         "event": "hallucinated_ticket_intercepted_sync",
                     },
                 )
-                support_customer_name = current_customer_name or "Customer"
                 ticket_resp = _create_ticket_sync(
                     order_id=support_order_id or "",
                     issue_type="Complaint",
@@ -820,7 +835,17 @@ def agent_node(state: AgentState) -> AgentState:
             if not _has_tool and not _has_tkt_in_response:
                 logger.warning("ABSOLUTE FINAL ENFORCER: Forcing overdue ticket response")
                 if not _has_ticket_in_history:
-                    support_customer_name = current_customer_name or "Customer"
+                    support_customer_name = current_customer_name
+                    if not support_customer_name:
+                        for m in reversed(state["messages"]):
+                            if isinstance(m, ToolMessage) and (getattr(m, "name", "") == "lookup_customer_orders" or '"customer"' in (m.content or "")):
+                                try:
+                                    parsed_c = json.loads(m.content)
+                                    if isinstance(parsed_c, dict) and parsed_c.get("customer"):
+                                        support_customer_name = parsed_c["customer"]
+                                        break
+                                except Exception:
+                                    pass
                     ticket_resp = _create_ticket_sync(
                         order_id=support_order_id or "",
                         issue_type="Complaint",

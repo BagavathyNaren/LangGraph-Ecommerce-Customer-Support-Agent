@@ -8,6 +8,17 @@ from langchain_core.messages import ToolMessage
 from tools.real_tools import create_support_ticket as _real_create_support_ticket
 
 
+INVALID_NAME_WORDS = {
+    "upset", "angry", "frustrated", "disappointed", "worried", "furious", "unhappy",
+    "confused", "irritated", "shocked", "annoyed", "mad", "sad", "sorry", "glad",
+    "looking", "trying", "asking", "wondering", "calling", "writing", "reaching",
+    "waiting", "having", "facing", "experiencing", "checking", "inquiring",
+    "ready", "interested", "here", "back", "new", "old", "not", "just", "still",
+    "very", "so", "really", "extremely", "quite", "too", "also", "order", "orders",
+    "delivery", "refund", "ticket", "issue", "problem", "help", "assisted"
+}
+
+
 def extract_customer_name(text: str) -> str | None:
     # Match variations of introduction, allowing optional comma, colon, and capturing the name
     match = _re.search(
@@ -18,6 +29,13 @@ def extract_customer_name(text: str) -> str | None:
     if not match:
         return None
     raw_name = match.group(1).strip()
+    words = [w.lower() for w in raw_name.split()]
+    if not words or any(w in INVALID_NAME_WORDS for w in words):
+        return None
+
+    # Names should be 1-4 words
+    if len(words) > 4:
+        return None
 
     # Normalize spaced out letters or weird word boundaries from speech recognition:
     # e.g., "a h i l a" -> "ahila", "a hila" -> "ahila", "a LIS" -> "alis", "Al is" -> "alis"

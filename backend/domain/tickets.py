@@ -34,7 +34,7 @@ def create_support_ticket(
                             }
 
                         # Bug 1 Fix: Validate caller's name matches the order owner
-                        if customer_name:
+                        if customer_name and customer_name.lower().strip() not in ("customer", ""):
                             cur.execute("SELECT name FROM customers WHERE customer_id = %s", (customer_id,))
                             owner_row = cur.fetchone()
                             if owner_row and owner_row[0]:
