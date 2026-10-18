@@ -85,3 +85,12 @@ def test_escalate_scans_history_reverse(mock_db_connection):
     last_msg = result["messages"][-1]
     assert isinstance(last_msg, AIMessage)
     assert "TKT-" in last_msg.content
+
+
+def test_llm_configuration_for_gpt_6_luna():
+    from agent.nodes.agent import llm
+    assert "luna" in str(getattr(llm, "model_name", getattr(llm, "model", ""))).lower()
+    # Ensure temperature is not 0 (which triggers 400 Bad Request on Luna)
+    assert getattr(llm, "temperature", None) is None
+    assert getattr(llm, "reasoning_effort", None) == "none"
+

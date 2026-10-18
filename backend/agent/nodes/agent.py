@@ -19,8 +19,22 @@ from tools.agent_tools import AGENT_TOOLS
 
 logger = get_logger("ecommerce-agent")
 
-# Model set to GPT 6 Luna
-llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-6-luna"), temperature=0, streaming=True, request_timeout=30)
+# Model configuration: GPT-6 Luna / reasoning models do not support temperature parameter
+# and require reasoning_effort="none" when using function tool calling in /v1/chat/completions.
+model_name = os.getenv("OPENAI_MODEL", "gpt-6-luna")
+is_reasoning_or_luna = any(kw in model_name.lower() for kw in ["gpt-6", "luna", "o1", "o3", "o4", "reasoning"])
+
+llm_kwargs = {
+    "model": model_name,
+    "streaming": True,
+    "request_timeout": 30,
+}
+if is_reasoning_or_luna:
+    llm_kwargs["reasoning_effort"] = "none"
+else:
+    llm_kwargs["temperature"] = 0
+
+llm = ChatOpenAI(**llm_kwargs)
 agent_llm = llm.bind_tools(AGENT_TOOLS)
 
 MAX_REACT_ITERATIONS = 15  # Hard safety cap to prevent infinite loops
