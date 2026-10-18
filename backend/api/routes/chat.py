@@ -176,7 +176,7 @@ async def stream_chat_response(request: ChatRequest, background_tasks: Backgroun
     try:
         if len(message) > 500:
             raise ValueError("Message exceeds maximum length of 500 characters.")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         validated_message, pii_detected = await loop.run_in_executor(None, validate_input, message)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

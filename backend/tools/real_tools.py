@@ -15,9 +15,12 @@ from domain.products.search import fetch_retailer_data, search_products
 from domain.refunds import get_refund_status, initiate_return
 from domain.rules import SUPPORTED_COUNTRIES, USER_FRIENDLY_DB_ERROR
 from domain.tickets import create_support_ticket
+from infra.db import get_connection, get_pool
 from infra.http import _create_retry_session, _session
 
 __all__ = [
+    "get_connection",
+    "get_pool",
     "_create_retry_session",
     "_session",
     "is_country_supported",

@@ -1,6 +1,5 @@
 import os
 import re
-import urllib.parse
 from infra.http import _session
 from infra.logger import get_logger
 
@@ -33,7 +32,6 @@ def is_country_supported(country: str) -> bool:
 
 def extract_price_from_text(text: str, default_currency: str = "INR") -> str:
     """Helper to extract estimated price in various currencies from title or snippet."""
-    import re
 
     # Clean text to remove common numeric specs to avoid false matches (e.g. 200 MP, 512 GB)
     cleaned = re.sub(
@@ -103,7 +101,6 @@ def extract_price_from_text(text: str, default_currency: str = "INR") -> str:
 
 def clean_title_for_search(title: str) -> str:
     """Helper to strip site prefix and suffix metadata for highly accurate search queries."""
-    import re
 
     cleaned = title
     # Remove common prefix patterns (e.g. "Amazon.com: ", "亚马逊海外购：")
@@ -128,7 +125,6 @@ def clean_title_for_search(title: str) -> str:
 def get_shopping_price_fallback(title: str, currency: str = "USD", gl: str = "us", hl: str = "en") -> str:
     """Fallback helper to query Google Shopping broadly for a specific product title
     to retrieve a realistic price if organic search returned 'Unknown'."""
-    import re
 
     serper_key = os.getenv("SERPER_API_KEY")
     if not serper_key:

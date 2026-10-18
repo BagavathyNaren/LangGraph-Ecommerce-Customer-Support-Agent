@@ -1,9 +1,7 @@
-import re
-from domain.analytics import log_event
+from domain.products.pricing import is_country_supported
 from domain.rules import USER_FRIENDLY_DB_ERROR
 from infra.db import get_connection
 from infra.logger import get_logger
-from infra.notifications import send_email
 
 logger = get_logger("customers")
 

@@ -217,7 +217,7 @@ def run_evaluation(graph):
         isolated_thread_id = f"{case['thread_id']}-{run_id}"
         start_time = time.time()
         try:
-            from security.guards import validate_input
+            from infra.security.guards import validate_input
 
             # Handle expected-blocked cases (jailbreak)
             if case.get("expected_blocked"):

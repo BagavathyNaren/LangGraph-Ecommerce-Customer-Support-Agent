@@ -149,6 +149,7 @@ def create_new_order(
     item: str,
     config: RunnableConfig,
     email: str | None = None,
+    customer_email: str | None = None,
     product_id: str | None = None,
     price: str | None = None,
     currency: str | None = None,
@@ -158,9 +159,10 @@ def create_new_order(
     Use 'product_id' if the customer selected a specific pre-existing product.
     If the product was found via 'search_retailer_platform', pass the 'price', 'currency' (e.g. INR, USD), and 'source_website' so the product can be dynamically inserted into the catalog.
     Email is only required if the customer is completely new and not registered yet."""
-    if email:
-        email = email.lower().replace(" at ", "@").replace(" ", "")
-    real_email = email if (email and "@" in email) else config.get("configurable", {}).get("raw_email")
+    target_email = email or customer_email
+    if target_email:
+        target_email = target_email.lower().replace(" at ", "@").replace(" ", "")
+    real_email = target_email if (target_email and "@" in target_email) else config.get("configurable", {}).get("raw_email")
     result = place_new_order(customer_name, item, real_email, product_id, price, currency, source_website)
     return str(result)
 

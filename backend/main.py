@@ -115,7 +115,7 @@ async def lifespan(app: FastAPI):
         logger.warning(f"DB migration warning: {e}", extra={"event": "db_migration_warning"})
 
     # Asynchronously build graph in background
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     async def _build_graph_bg():
         try:

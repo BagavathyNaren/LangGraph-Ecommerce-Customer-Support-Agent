@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 
-from graph.graph_builder import build_graph
+from agent.graph_builder import build_graph
 
 
 def test_graph_compilation(mock_db_connection):
@@ -31,7 +31,7 @@ def test_scenario_a_flawless_flow(mock_db_connection):
     """
     mock_saver = MemorySaver()
     mock_saver.setup = lambda: None
-    with patch("graph.graph_builder.PostgresSaver", return_value=mock_saver):
+    with patch("agent.graph_builder.MemorySaver", return_value=mock_saver):
         compiled_graph = build_graph()
         assert compiled_graph is not None
 
@@ -91,12 +91,14 @@ def test_scenario_a_flawless_flow(mock_db_connection):
 
         return AIMessage(content="I can help you with your order!")
 
-    import graph.nodes as graph_nodes
+    import agent.nodes.agent as agent_node_mod
+    import agent.nodes as graph_nodes
 
     mock_runnable = MagicMock()
     mock_runnable.invoke.side_effect = mock_agent_llm_invoke
 
-    orig_llm = graph_nodes.agent_llm
+    orig_llm = agent_node_mod.agent_llm
+    agent_node_mod.agent_llm = mock_runnable
     graph_nodes.agent_llm = mock_runnable
 
     try:
@@ -135,6 +137,7 @@ def test_scenario_a_flawless_flow(mock_db_connection):
         final_msg = res2["messages"][-1]
         assert "ORD12345" in final_msg.content or "placed" in final_msg.content.lower()
     finally:
+        agent_node_mod.agent_llm = orig_llm
         graph_nodes.agent_llm = orig_llm
 
 
@@ -147,7 +150,7 @@ def test_scenario_b_unregistered_halt(mock_db_connection):
     """
     mock_saver = MemorySaver()
     mock_saver.setup = lambda: None
-    with patch("graph.graph_builder.PostgresSaver", return_value=mock_saver):
+    with patch("agent.graph_builder.MemorySaver", return_value=mock_saver):
         compiled_graph = build_graph()
         assert compiled_graph is not None
 
@@ -222,12 +225,14 @@ def test_scenario_b_unregistered_halt(mock_db_connection):
 
         return AIMessage(content="I can help you!")
 
-    import graph.nodes as graph_nodes
+    import agent.nodes.agent as agent_node_mod
+    import agent.nodes as graph_nodes
 
     mock_runnable = MagicMock()
     mock_runnable.invoke.side_effect = mock_agent_llm_invoke
 
-    orig_llm = graph_nodes.agent_llm
+    orig_llm = agent_node_mod.agent_llm
+    agent_node_mod.agent_llm = mock_runnable
     graph_nodes.agent_llm = mock_runnable
 
     try:
@@ -262,6 +267,7 @@ def test_scenario_b_unregistered_halt(mock_db_connection):
         final_msg = res3["messages"][-1]
         assert "ORD99988" in final_msg.content or "placed" in final_msg.content.lower()
     finally:
+        agent_node_mod.agent_llm = orig_llm
         graph_nodes.agent_llm = orig_llm
 
 
@@ -273,15 +279,17 @@ def test_scenario_c_escalation(mock_db_connection):
     """
     mock_saver = MemorySaver()
     mock_saver.setup = lambda: None
-    with patch("graph.graph_builder.PostgresSaver", return_value=mock_saver):
+    with patch("agent.graph_builder.MemorySaver", return_value=mock_saver):
         compiled_graph = build_graph()
         assert compiled_graph is not None
 
     # Mock agent_llm just in case to be 100% safe from real API calls
-    import graph.nodes as graph_nodes
+    import agent.nodes.agent as agent_node_mod
+    import agent.nodes as graph_nodes
 
     mock_runnable = MagicMock()
-    orig_llm = graph_nodes.agent_llm
+    orig_llm = agent_node_mod.agent_llm
+    agent_node_mod.agent_llm = mock_runnable
     graph_nodes.agent_llm = mock_runnable
 
     try:
@@ -310,4 +318,5 @@ def test_scenario_c_escalation(mock_db_connection):
         assert isinstance(final_msg, AIMessage)
         assert "TKT-" in final_msg.content or "ticket" in final_msg.content.lower()
     finally:
+        agent_node_mod.agent_llm = orig_llm
         graph_nodes.agent_llm = orig_llm

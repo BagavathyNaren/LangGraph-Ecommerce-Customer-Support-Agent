@@ -1,4 +1,3 @@
-import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,10 +14,7 @@ logger = get_logger("ecommerce-agent")
 
 def tool_node(state: AgentState) -> AgentState:
     """Execute tool calls from the agent's last response, with Redis caching and parallel execution."""
-    import time
-    from concurrent.futures import ThreadPoolExecutor
 
-    from infra.cache.redis_cache import get_cached_tool_result, set_cached_tool_result
 
     last_message = state["messages"][-1]
     tool_map = {t.name: t for t in AGENT_TOOLS}

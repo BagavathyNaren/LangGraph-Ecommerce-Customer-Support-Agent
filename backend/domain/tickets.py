@@ -1,7 +1,6 @@
 from domain.analytics import log_event
 from infra.db import get_connection
 from infra.logger import get_logger
-from infra.notifications import send_email, send_telegram
 
 logger = get_logger("tickets")
 

@@ -1,4 +1,3 @@
-import ast as _ast
 import json
 import re as _re
 import uuid
@@ -15,12 +14,13 @@ from agent.nodes.guardrails.helpers import (
 from agent.nodes.guardrails.prompts import AGENT_SYSTEM_PROMPT
 from agent.state import AgentState
 from infra.logger import get_logger
+import os
 from tools.agent_tools import AGENT_TOOLS
-from tools.real_tools import create_support_ticket as _real_create_support_ticket
 
 logger = get_logger("ecommerce-agent")
 
-llm = ChatOpenAI(model="gpt-5-mini", temperature=0, streaming=True, request_timeout=30)
+# Model set to GPT 6 Luna
+llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-6-luna"), temperature=0, streaming=True, request_timeout=30)
 agent_llm = llm.bind_tools(AGENT_TOOLS)
 
 MAX_REACT_ITERATIONS = 15  # Hard safety cap to prevent infinite loops
@@ -44,7 +44,7 @@ def agent_node(state: AgentState) -> AgentState:
         # New user message — reset the counter
         react_iterations = 0
         new_order_id = state.get("order_id")
-        
+
     # Always try to extract order ID from the most recent human message
     import re as _re_tmp
     for m in reversed(state["messages"]):
@@ -94,7 +94,6 @@ def agent_node(state: AgentState) -> AgentState:
                 m = state["messages"][i]
                 messages_to_remove.append(RemoveMessage(id=m.id))
 
-    from datetime import datetime
     dynamic_prompt = AGENT_SYSTEM_PROMPT + f"\n\nCRITICAL CONTEXT: Today's current date is {datetime.now().strftime('%B %d, %Y')}."
     messages = [SystemMessage(content=dynamic_prompt)] + state["messages"]
     response = agent_llm.invoke(messages)
@@ -687,7 +686,7 @@ def agent_node(state: AgentState) -> AgentState:
                 kw in (last_msg.content.lower() if isinstance(last_msg, HumanMessage) else "")
                 for kw in _delivery_complaint_keywords
             )
-            
+
             delivery_date = None
             today = date.today()
             if _is_delivery_complaint:
@@ -718,7 +717,7 @@ def agent_node(state: AgentState) -> AgentState:
                     if _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
                     else "a new ticket"
                 )
-                
+
                 tc_id = f"call_{uuid.uuid4().hex[:12]}"
                 ai_msg_call = AIMessage(
                     content="",
@@ -734,7 +733,7 @@ def agent_node(state: AgentState) -> AgentState:
                     "order_id": new_order_id,
                     "react_iterations": react_iterations,
                 }
-            
+
             # 2. If it's a delivery complaint AND date has NOT passed BUT LLM claimed a ticket -> BLOCK TICKET
             elif _is_delivery_complaint and delivery_date and delivery_date >= today and (_has_tkt_pattern or _has_ticket_claim):
                 logger.info(
@@ -783,7 +782,7 @@ def agent_node(state: AgentState) -> AgentState:
                     if _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
                     else "a new ticket"
                 )
-                
+
                 tc_id = f"call_{uuid.uuid4().hex[:12]}"
                 ai_msg_call = AIMessage(
                     content="",
@@ -813,11 +812,11 @@ def agent_node(state: AgentState) -> AgentState:
         kw in (last_msg.content.lower() if isinstance(last_msg, HumanMessage) else "")
         for kw in _delivery_complaint_keywords
     )
-    
+
     if _is_delivery_complaint:
         delivery_date = _get_order_delivery_date_from_history(state["messages"], support_order_id)
         today = date.today()
-        
+
         if delivery_date and delivery_date < today:
             _has_tool = any(tc["name"] == "create_support_ticket" for tc in response.tool_calls)
             _has_ticket_in_history = False
@@ -829,9 +828,9 @@ def agent_node(state: AgentState) -> AgentState:
                     match = _re_tmp.search(r"TKT-[0-9A-F]+", str(m.content))
                     if match:
                         _ticket_id = match.group(0)
-                        
+
             _has_tkt_in_response = _re_tmp.search(r"TKT-[0-9A-F]+", response.content or "")
-            
+
             if not _has_tool and not _has_tkt_in_response:
                 logger.warning("ABSOLUTE FINAL ENFORCER: Forcing overdue ticket response")
                 if not _has_ticket_in_history:
@@ -858,7 +857,7 @@ def agent_node(state: AgentState) -> AgentState:
                         if isinstance(ticket_resp, dict)
                         else None
                     ) or (match.group(0) if match else "a new ticket")
-                        
+
                     tc_id = f"call_{uuid.uuid4().hex[:12]}"
                     ai_msg_call = AIMessage(content="", tool_calls=[{"name": "create_support_ticket", "args": {"order_id": support_order_id or "", "issue_type": "Complaint", "message": last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation", "customer_name": support_customer_name}, "id": tc_id, "type": "tool_call"}])
                     tool_msg = ToolMessage(content=str(ticket_resp), name="create_support_ticket", tool_call_id=tc_id)

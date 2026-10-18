@@ -1,13 +1,9 @@
 import random
 import uuid
 from datetime import datetime, timedelta
-from domain.analytics import log_event
-from domain.products.pricing import is_country_supported
-from domain.products.search import search_products
 from domain.rules import USER_FRIENDLY_DB_ERROR
 from infra.db import get_connection
 from infra.logger import get_logger
-from infra.notifications import send_email, send_telegram
 
 logger = get_logger("orders")
 
@@ -149,9 +145,6 @@ def place_new_order(
     category: str = "General",
 ) -> dict:
     """Place a new order for a customer."""
-    import random
-    import uuid
-    from datetime import datetime, timedelta
 
     # Truncate item name at the very beginning to prevent VARCHAR(100) errors
     if item:

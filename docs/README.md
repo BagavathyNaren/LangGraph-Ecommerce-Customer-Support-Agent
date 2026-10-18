@@ -1,4 +1,4 @@
-﻿# Project Documentation
+# Project Documentation
 
 This directory contains technical specifications, architecture designs, deployment configurations, and testing guides for the E-Commerce Support Agent.
 
@@ -7,6 +7,7 @@ This directory contains technical specifications, architecture designs, deployme
 | Document | Description |
 | :--- | :--- |
 | [Blueprint.md](./Blueprint.md) | Comprehensive engineering blueprint and system specification. |
+| [AGENTIC_ARCHITECTURE.md](./AGENTIC_ARCHITECTURE.md) | In-depth explanation of why this app is agentic (ReAct loop, agency, state machine). |
 | [PRODUCTION_ARCHITECTURE.md](./PRODUCTION_ARCHITECTURE.md) | GCP Cloud Run, Cloud SQL, Redis, and network architecture. |
 | [DESIGN.md](./DESIGN.md) | LangGraph ReAct state machine design and tool execution flow. |
 | [SECRETS.md](./SECRETS.md) | Environment variables, API keys, and secret management. |

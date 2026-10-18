@@ -9,6 +9,7 @@ logger = get_logger("env-validator")
 
 class EnvSettings(BaseModel):
     OPENAI_API_KEY: str = Field(default="")
+    OPENAI_MODEL: str = Field(default="gpt-6-luna")
     DATABASE_URL: str = Field(default="")
     CLOUD_SQL_CONNECTION_NAME: str = Field(default="")
     EMAIL_PROVIDER: str = Field(default="resend")
@@ -62,6 +63,7 @@ def validate_env():
         # Load from os.environ
         data = {
             "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),
+            "OPENAI_MODEL": os.environ.get("OPENAI_MODEL", "gpt-6-luna"),
             "DATABASE_URL": os.environ.get("DATABASE_URL", ""),
             "CLOUD_SQL_CONNECTION_NAME": os.environ.get("CLOUD_SQL_CONNECTION_NAME", ""),
             "EMAIL_PROVIDER": os.environ.get("EMAIL_PROVIDER", "resend"),

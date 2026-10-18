@@ -4,7 +4,6 @@ from domain.analytics import log_event
 from domain.rules import USER_FRIENDLY_DB_ERROR
 from infra.db import get_connection
 from infra.logger import get_logger
-from infra.notifications import send_email, send_telegram
 
 logger = get_logger("refunds")
 
@@ -40,8 +39,6 @@ def get_refund_status(order_id: str) -> dict:
 
 
 def initiate_return(order_id: str, reason: str) -> dict:
-    import random
-    import uuid
 
     try:
         with get_connection() as conn:

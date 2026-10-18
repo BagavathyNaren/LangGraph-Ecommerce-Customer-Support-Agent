@@ -18,7 +18,12 @@ def test_database_connection_dropout_chaos():
     - Verify that get_order_status, cancel_order, and initiate_return recover gracefully,
       returning user-friendly error messages rather than crashing the system.
     """
-    with patch("tools.real_tools.get_connection") as mock_get_conn:
+    with (
+        patch("infra.db.get_connection") as mock_get_conn,
+        patch("domain.orders.get_connection", mock_get_conn),
+        patch("domain.refunds.get_connection", mock_get_conn),
+        patch("tools.real_tools.get_connection", mock_get_conn),
+    ):
         # Simulate PostgreSQL connection timeout / OperationalError
         mock_get_conn.side_effect = Exception(
             "OperationalError: connection to server at localhost:5432 failed: Connection refused"
@@ -47,7 +52,11 @@ def test_external_search_api_timeout_recovery():
     - Verify that fetch_retailer_data falls back gracefully and handles complete failure
       without crashing the application.
     """
-    with patch("requests.Session.post") as mock_post, patch("tools.real_tools.search_products") as mock_search_products:
+    with (
+        patch("requests.Session.post") as mock_post,
+        patch("domain.products.search.search_products") as mock_search_products,
+        patch("tools.real_tools.search_products", mock_search_products),
+    ):
         # Simulate network timeout
         mock_post.side_effect = requests.exceptions.Timeout("Connection timed out on api.tavily.com")
         # Simulate catalog fallback returning no products

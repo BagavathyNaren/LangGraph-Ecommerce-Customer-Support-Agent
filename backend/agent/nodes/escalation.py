@@ -1,14 +1,11 @@
-import json
 import re as _re
 import uuid
 from datetime import date
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from agent.nodes.guardrails.helpers import (
-    _create_ticket_sync,
     _get_order_delivery_date_from_history,
-    extract_customer_name,
 )
 from agent.state import AgentState
 from infra.logger import get_logger
@@ -76,7 +73,6 @@ def escalation_check(state: AgentState) -> AgentState:
 
 def escalate(state: AgentState) -> AgentState:
     """Escalate to a human agent by creating a support ticket."""
-    import re as _re
 
     messages = state.get("messages", [])
     human_messages = [m for m in messages if isinstance(m, HumanMessage)]

@@ -88,6 +88,7 @@ All pushes to the `main` branch are automatically deployed by GitHub Actions. En
 ## 📚 Documentation
 Detailed technical documentation and architecture blueprints are located in the [`docs/`](./docs/README.md) directory:
 - [System Architecture Blueprint](./docs/Blueprint.md)
+- [Agentic AI Architecture Explained](./docs/AGENTIC_ARCHITECTURE.md)
 - [Production Cloud Architecture](./docs/PRODUCTION_ARCHITECTURE.md)
 - [ReAct State Machine Design](./docs/DESIGN.md)
 - [Secrets & Environment Variables](./docs/SECRETS.md)

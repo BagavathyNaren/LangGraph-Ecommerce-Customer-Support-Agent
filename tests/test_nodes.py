@@ -1,6 +1,6 @@
 from langchain_core.messages import AIMessage, HumanMessage
 
-from graph.nodes import escalate, escalation_check
+from agent.nodes import escalate, escalation_check
 
 
 def test_escalation_check_no_escalate():

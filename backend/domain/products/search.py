@@ -6,7 +6,6 @@ from infra.db import get_connection
 from infra.http import _session
 from infra.logger import get_logger
 from domain.products.pricing import (
-    clean_title_for_search,
     extract_price_from_text,
     get_shopping_price_fallback,
     is_country_supported,
@@ -64,8 +63,6 @@ def fetch_retailer_data(platform: str, query: str, country: str = "India") -> di
             "success": False,
             "message": f"We only support ordering and product searches for UAE, Japan, US, UK, and India. Unfortunately, '{country}' is not supported.",
         }
-    import re
-    import urllib.parse
 
     platform = platform.lower().strip()
     country_clean = str(country).strip().lower() if country else "india"
@@ -398,7 +395,7 @@ def fetch_retailer_data(platform: str, query: str, country: str = "India") -> di
         if db_res.get("success"):
             results = []
             for p in db_res.get("products", []):
-                prod_title = p.get("title", "")
+                prod_title = p.get("title") or p.get("name", "")
                 prod_price = p.get("price", "Unknown")
                 prod_source = p.get("source", "https://amazon.in")
                 results.append(
