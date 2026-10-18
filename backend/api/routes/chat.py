@@ -21,10 +21,15 @@ router = APIRouter()
 
 def get_final_response(result):
     """Extract the final AI response from the ReAct message list."""
+    def _extract_str(content):
+        if isinstance(content, list):
+            return "".join([p if isinstance(p, str) else p.get("text", str(p)) if isinstance(p, dict) else str(p) for p in content])
+        return str(content) if content is not None else ""
+
     for msg in reversed(result["messages"]):
         if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
-            return msg.content
-    return result["messages"][-1].content
+            return _extract_str(msg.content)
+    return _extract_str(result["messages"][-1].content)
 
 
 @router.post("/chat")

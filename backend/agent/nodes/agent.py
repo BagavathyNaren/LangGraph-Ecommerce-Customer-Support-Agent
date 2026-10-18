@@ -112,6 +112,20 @@ def agent_node(state: AgentState) -> AgentState:
     messages = [SystemMessage(content=dynamic_prompt)] + state["messages"]
     response = agent_llm.invoke(messages)
 
+    # Normalize response.content to str (OpenAI models may return list of content parts)
+    if isinstance(response.content, list):
+        text_parts = []
+        for part in response.content:
+            if isinstance(part, str):
+                text_parts.append(part)
+            elif isinstance(part, dict) and "text" in part:
+                text_parts.append(part["text"])
+            else:
+                text_parts.append(str(part))
+        response.content = "".join(text_parts)
+    elif response.content is None:
+        response.content = ""
+
     # ── Always resolve last_msg and current_customer_name first ──
     # These must be initialized before ANY guardrail runs, including Guardrail D
     # which fires on plain-text responses (no tool_calls) and would otherwise crash.

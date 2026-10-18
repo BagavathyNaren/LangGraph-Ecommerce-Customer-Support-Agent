@@ -14,13 +14,21 @@ from tools.real_tools import create_support_ticket as _real_create_support_ticke
 logger = get_logger("ecommerce-agent")
 
 
+def _content_to_str(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join([p if isinstance(p, str) else p.get("text", str(p)) if isinstance(p, dict) else str(p) for p in content])
+    return str(content) if content is not None else ""
+
+
 def escalation_check(state: AgentState) -> AgentState:
     """Check if the conversation should be escalated to a human."""
     human_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     if not human_messages:
         return state
 
-    last_message = human_messages[-1].content.lower()
+    last_message = _content_to_str(human_messages[-1].content).lower()
 
     # Standard anger keywords
     anger_words = [
@@ -46,7 +54,7 @@ def escalation_check(state: AgentState) -> AgentState:
         if human_idx > 0:
             for m in reversed(state["messages"][:human_idx]):
                 if isinstance(m, AIMessage) and m.content:
-                    last_ai = m.content.lower()
+                    last_ai = _content_to_str(m.content).lower()
                     if (
                         "reason for cancel" in last_ai
                         or "reason for request" in last_ai
@@ -78,7 +86,7 @@ def escalate(state: AgentState) -> AgentState:
     human_messages = [m for m in messages if isinstance(m, HumanMessage)]
     # Check if a REAL ticket was already created (ignore hallucinated "TKT-XXXXX" placeholder)
     already_escalated = any(
-        _re.search(r"TKT-[0-9A-F]{6}\b", m.content)
+        _re.search(r"TKT-[0-9A-F]{6}\b", _content_to_str(m.content))
         for m in messages
         if isinstance(m, AIMessage)
     )
