@@ -652,7 +652,10 @@ function App() {
 
         const resp = await fetch(
           `${BASE_URL}/tts?text=${encodeURIComponent(cleanedText)}`,
-          { signal: abortCtrl.signal }
+          {
+            signal: abortCtrl.signal,
+            headers: { 'X-App-Client': 'my-agentic-lab-v1' }
+          }
         )
         if (!resp.ok) throw new Error(`TTS fetch failed: ${resp.status}`)
         const arrayBuffer = await resp.arrayBuffer()
@@ -874,13 +877,22 @@ function App() {
       const BASE_URL = import.meta.env.VITE_API_URL || 'https://ecommerce-support-agent-93337753347.asia-south1.run.app'
       const response = await fetch(`${BASE_URL}/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-Client': 'my-agentic-lab-v1',
+        },
         body: JSON.stringify({ message: text, thread_id: threadId })
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        fullText = errorData.detail || `Request failed (${response.status}).`
+        if (response.status === 429) {
+          fullText = errorData.error || 'Rate limit reached. Please wait a moment before sending another message to protect system resources.';
+        } else if (response.status === 403) {
+          fullText = errorData.error || 'Access forbidden: Request blocked by security policy.';
+        } else {
+          fullText = errorData.detail || errorData.error || `Request failed (${response.status}).`;
+        }
       } else {
         const reader = response.body.getReader()
         const decoder = new TextDecoder()

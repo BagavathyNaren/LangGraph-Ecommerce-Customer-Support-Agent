@@ -28,6 +28,7 @@ llm_kwargs = {
     "model": model_name,
     "streaming": True,
     "request_timeout": 30,
+    "max_tokens": 600,
 }
 if is_reasoning_or_luna:
     llm_kwargs["reasoning_effort"] = "none"
@@ -37,7 +38,7 @@ else:
 llm = ChatOpenAI(**llm_kwargs)
 agent_llm = llm.bind_tools(AGENT_TOOLS)
 
-MAX_REACT_ITERATIONS = 15  # Hard safety cap to prevent infinite loops
+MAX_REACT_ITERATIONS = 8  # Hard safety cap to prevent infinite loops
 
 
 def agent_node(state: AgentState) -> AgentState:

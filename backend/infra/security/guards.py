@@ -23,7 +23,7 @@ INPUT_SCRUB_ENTITIES = ["PHONE_NUMBER", "CREDIT_CARD"]
 # PHONE_NUMBER is removed because Presidio incorrectly flags prices like '444.99' as phone numbers
 OUTPUT_SCRUB_ENTITIES = ["CREDIT_CARD"]
 
-# Deterministic jailbreak/threat patterns — fast, reliable, not bypassable via prompt injection
+# Deterministic jailbreak/threat & credit-burn patterns — fast, reliable, not bypassable
 JAILBREAK_PATTERNS = [
     r"(?i)ignore\s+(previous|all|above|prior)\s+(instructions|prompts|rules)",
     r"(?i)you\s+are\s+now\s+a",
@@ -56,26 +56,41 @@ JAILBREAK_PATTERNS = [
     r"(?i)base64",
     r"(?i)ROT13",
     r"(?i)binary\s+code",
+    # Credit-burning attack patterns
+    r"(?i)(write|generate|output)\s+(an?\s+)?(infinite|endless|massive|\d{3,}\s+words?|very\s+long)",
+    r"(?i)repeat\s+.*(forever|infinitely|\d{2,}\s+times)",
+    r"(?i)never\s+stop\s+(writing|generating|talking|answering)",
+    r"(?i)fill\s+(the\s+entire|all)\s+tokens?",
+    r"(?i)infinite\s+loop",
 ]
 
 
 def validate_input(message: str) -> tuple[str, bool]:
     """Validate and sanitize user input. Returns (cleaned_message, pii_detected)."""
-    # 1. PII detection
+    # 1. Reject repetitive flood spam attacks designed to burn tokens
+    words = message.lower().split()
+    if len(words) > 15:
+        from collections import Counter
+        counts = Counter(words)
+        if any(count > 10 for count in counts.values()):
+            logger.warning("Repetitive flood pattern blocked", extra={"event": "spam_flood_blocked"})
+            raise ValueError("Input blocked by security guardrails: repetitive flood pattern detected.")
+
+    # 2. Deterministic jailbreak / credit-burn detection (regex — instant, not bypassable)
+    for pattern in JAILBREAK_PATTERNS:
+        if re.search(pattern, message):
+            logger.warning("Jailbreak or credit abuse attempt blocked", extra={"event": "jailbreak_blocked", "pattern": pattern})
+            raise ValueError("Input blocked by security guardrails.")
+
+    # 3. PII detection
     detect_results = analyzer.analyze(text=message, entities=PII_DETECT_ENTITIES, language="en")
     pii_detected = len(detect_results) > 0
 
-    # 2. PII redaction (only scrub entities in INPUT_SCRUB_ENTITIES)
+    # 4. PII redaction (only scrub entities in INPUT_SCRUB_ENTITIES)
     scrub_results = [r for r in detect_results if r.entity_type in INPUT_SCRUB_ENTITIES]
     if scrub_results:
         anonymized = anonymizer.anonymize(text=message, analyzer_results=scrub_results)
         message = anonymized.text
-
-    # 2. Deterministic jailbreak detection (regex — instant, not bypassable)
-    for pattern in JAILBREAK_PATTERNS:
-        if re.search(pattern, message):
-            logger.warning("Jailbreak attempt blocked", extra={"event": "jailbreak_blocked", "pattern": pattern})
-            raise ValueError("Input blocked by security guardrails.")
 
     return message, pii_detected
 
