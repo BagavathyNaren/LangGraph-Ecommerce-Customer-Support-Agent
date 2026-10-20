@@ -96,5 +96,5 @@ def test_rate_limiter_in_memory_triggers():
     # Next request must be blocked
     allowed, reason, retry_after = check_rate_limit(req, endpoint_tag="chat")
     assert allowed is False
-    assert "limit exceeded" in reason.lower()
+    assert "slow down" in reason.lower() or "limit" in reason.lower()
     assert retry_after > 0

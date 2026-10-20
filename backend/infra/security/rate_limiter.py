@@ -16,16 +16,17 @@ _memory_hour_hits = defaultdict(deque)
 _memory_day_hits = defaultdict(deque)
 
 # Rate limit thresholds (requests allowed per window)
+# Generous limits for normal human chat/testing, while blocking automated bot loops & DDoS
 RATE_LIMITS = {
     "chat": {
-        "minute": int(os.getenv("RATE_LIMIT_CHAT_PER_MINUTE", "15")),
-        "hour": int(os.getenv("RATE_LIMIT_CHAT_PER_HOUR", "60")),
-        "day": int(os.getenv("RATE_LIMIT_CHAT_PER_DAY", "200")),
+        "minute": int(os.getenv("RATE_LIMIT_CHAT_PER_MINUTE", "30")),
+        "hour": int(os.getenv("RATE_LIMIT_CHAT_PER_HOUR", "300")),
+        "day": int(os.getenv("RATE_LIMIT_CHAT_PER_DAY", "1000")),
     },
     "tts": {
-        "minute": int(os.getenv("RATE_LIMIT_TTS_PER_MINUTE", "6")),
-        "hour": int(os.getenv("RATE_LIMIT_TTS_PER_HOUR", "30")),
-        "day": int(os.getenv("RATE_LIMIT_TTS_PER_DAY", "100")),
+        "minute": int(os.getenv("RATE_LIMIT_TTS_PER_MINUTE", "15")),
+        "hour": int(os.getenv("RATE_LIMIT_TTS_PER_HOUR", "120")),
+        "day": int(os.getenv("RATE_LIMIT_TTS_PER_DAY", "500")),
     },
 }
 
@@ -54,7 +55,7 @@ def _check_memory_rate_limit(key: str, limits: dict) -> tuple[bool, str, int]:
             minute_q.popleft()
         if len(minute_q) >= limits["minute"]:
             retry_after = int(60 - (now - minute_q[0])) + 1
-            return False, "Per-minute limit exceeded. Please slow down.", max(1, retry_after)
+            return False, "You are sending messages too quickly. Please slow down.", max(1, retry_after)
 
         # 2. Hour window
         hour_q = _memory_hour_hits[key]
@@ -62,7 +63,7 @@ def _check_memory_rate_limit(key: str, limits: dict) -> tuple[bool, str, int]:
             hour_q.popleft()
         if len(hour_q) >= limits["hour"]:
             retry_after = int(3600 - (now - hour_q[0])) + 1
-            return False, "Hourly limit exceeded. Please try again later.", max(1, retry_after)
+            return False, "Hourly message quota exceeded. Please try again shortly.", max(1, retry_after)
 
         # 3. Day window
         day_q = _memory_day_hits[key]
@@ -70,7 +71,7 @@ def _check_memory_rate_limit(key: str, limits: dict) -> tuple[bool, str, int]:
             day_q.popleft()
         if len(day_q) >= limits["day"]:
             retry_after = int(86400 - (now - day_q[0])) + 1
-            return False, "Daily credit protection limit reached. Please try again tomorrow.", max(1, retry_after)
+            return False, "Daily credit protection quota reached. Please try again tomorrow.", max(1, retry_after)
 
         # Record this hit
         minute_q.append(now)
@@ -129,7 +130,7 @@ def check_rate_limit(request: Request, endpoint_tag: str = "chat") -> tuple[bool
                 "Rate limit exceeded (minute)",
                 extra={"event": "rate_limit_exceeded", "ip": ip, "endpoint": endpoint_tag, "count": minute_count},
             )
-            return False, "Rate limit exceeded (requests/min). Please slow down.", max(1, retry_after)
+            return False, "You are sending messages too quickly. Please slow down.", max(1, retry_after)
 
         if hour_count > limits["hour"]:
             retry_after = 3600 - (current_time % 3600) + 1
@@ -137,7 +138,7 @@ def check_rate_limit(request: Request, endpoint_tag: str = "chat") -> tuple[bool
                 "Rate limit exceeded (hour)",
                 extra={"event": "rate_limit_exceeded", "ip": ip, "endpoint": endpoint_tag, "count": hour_count},
             )
-            return False, "Hourly request quota exceeded. Please try again later.", max(1, retry_after)
+            return False, "Hourly message quota exceeded. Please try again shortly.", max(1, retry_after)
 
         if day_count > limits["day"]:
             retry_after = 86400 - (current_time % 86400) + 1
@@ -145,7 +146,7 @@ def check_rate_limit(request: Request, endpoint_tag: str = "chat") -> tuple[bool
                 "Rate limit exceeded (day)",
                 extra={"event": "rate_limit_exceeded", "ip": ip, "endpoint": endpoint_tag, "count": day_count},
             )
-            return False, "Daily API credit protection limit reached. Please try again tomorrow.", max(1, retry_after)
+            return False, "Daily credit protection quota reached. Please try again tomorrow.", max(1, retry_after)
 
         return True, "", 0
 
