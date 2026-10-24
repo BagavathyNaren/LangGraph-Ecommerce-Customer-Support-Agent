@@ -150,21 +150,22 @@ def escalate(state: AgentState) -> AgentState:
         if not customer_name:
             for m in reversed(messages):
                 if isinstance(m, HumanMessage):
+                    m_content_str = _content_to_str(m.content)
                     intro_match = _re.search(
                         r"(?:my\s+(?:full\s+)?name\s+is|I\s+am|I\'m)\s*[,:]?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
-                        m.content,
+                        m_content_str,
                     )
                     if intro_match:
                         customer_name = intro_match.group(1).strip()
                         break
                     if not order_id:
-                        order_match = _re.search(r"\b(ORD\s*\d{3,10})\b", m.content, _re.IGNORECASE)
+                        order_match = _re.search(r"\b(ORD\s*\d{3,10})\b", m_content_str, _re.IGNORECASE)
                         if order_match:
                             order_id = _re.sub(r"\s+", "", order_match.group(1)).upper()
 
         # Summarize the conversation to provide context for the human agent
         history_lines = [
-            f"{'User' if isinstance(m, HumanMessage) else 'Agent'}: {m.content}"
+            f"{'User' if isinstance(m, HumanMessage) else 'Agent'}: {_content_to_str(m.content)}"
             for m in messages[-4:]
             if isinstance(m, (HumanMessage, AIMessage))
         ]
@@ -178,7 +179,7 @@ def escalate(state: AgentState) -> AgentState:
             "didn't arrive", "didn't receive", "never received", "missing",
             "delayed", "been weeks", "been days", "where is my", "still waiting",
         ]
-        last_human = human_messages[-1].content.lower() if human_messages else ""
+        last_human = _content_to_str(human_messages[-1].content).lower() if human_messages else ""
         _is_delivery_complaint = any(kw in last_human for kw in _delivery_keywords)
         delivery_date = _get_order_delivery_date_from_history(messages, order_id)
         today = date.today()
