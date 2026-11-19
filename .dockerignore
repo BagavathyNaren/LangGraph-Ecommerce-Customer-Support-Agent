@@ -37,3 +37,20 @@ evaluation/results/
 README.md
 *.sqlite
 *.db
+
+# Frontend (deployed separately via Firebase Hosting)
+frontend/
+node_modules/
+
+# Tests and dev tooling (not needed in production container)
+tests/
+tests_e2e/
+scratch/
+playwright-report/
+test-results/
+playwright.config.js
+locustfile.py
+docs/
+
+# GHA credential files (must never be in production image)
+gha-creds-*.json

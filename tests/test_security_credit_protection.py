@@ -1,3 +1,33 @@
+"""
+Security and credit-protection tests.
+
+Mocks spaCy/Presidio dependencies upfront so the test suite runs even when
+the spaCy C-extension DLLs are blocked by Application Control policy (the
+jailbreak/rate-limit tests only exercise regex and counter logic, not NLP).
+"""
+import sys
+from unittest.mock import MagicMock
+
+# ── Pre-mock Presidio (depends on spaCy, which may fail to load DLLs) ──────
+_mock_analyzer_engine = MagicMock()
+_mock_analyzer_engine_instance = MagicMock()
+_mock_analyzer_engine_instance.analyze.return_value = []  # no PII hits
+_mock_analyzer_engine.return_value = _mock_analyzer_engine_instance
+
+_mock_anonymizer_engine = MagicMock()
+_mock_anonymizer_engine_instance = MagicMock()
+_mock_anonymizer_engine.return_value = _mock_anonymizer_engine_instance
+
+# Inject mocks *before* guards.py is imported
+if "presidio_analyzer" not in sys.modules:
+    _pa = MagicMock()
+    _pa.AnalyzerEngine = _mock_analyzer_engine
+    sys.modules["presidio_analyzer"] = _pa
+if "presidio_anonymizer" not in sys.modules:
+    _pan = MagicMock()
+    _pan.AnonymizerEngine = _mock_anonymizer_engine
+    sys.modules["presidio_anonymizer"] = _pan
+
 import pytest
 from starlette.testclient import TestClient
 

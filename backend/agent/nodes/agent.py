@@ -61,10 +61,9 @@ def agent_node(state: AgentState) -> AgentState:
         new_order_id = state.get("order_id")
 
     # Always try to extract order ID from the most recent human message
-    import re as _re_tmp
     for m in reversed(state["messages"]):
         if isinstance(m, HumanMessage):
-            match = _re_tmp.search(r"ORD\d{3,10}", m.content.upper())
+            match = _re.search(r"ORD\d{3,10}", m.content.upper())
             if match:
                 new_order_id = match.group(0)
             elif any(phrase in m.content.lower() for phrase in (
@@ -736,14 +735,13 @@ def agent_node(state: AgentState) -> AgentState:
                     message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
                     customer_name=support_customer_name
                 )
-                import re as _re_tmp
                 ticket_id = (
                     ticket_resp.get("ticket_id")
                     if isinstance(ticket_resp, dict)
                     else None
                 ) or (
-                    _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp)).group(0)
-                    if _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
+                    _re.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp)).group(0)
+                    if _re.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
                     else "a new ticket"
                 )
 
@@ -801,14 +799,13 @@ def agent_node(state: AgentState) -> AgentState:
                     message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
                     customer_name=support_customer_name
                 )
-                import re as _re_tmp
                 ticket_id = (
                     ticket_resp.get("ticket_id")
                     if isinstance(ticket_resp, dict)
                     else None
                 ) or (
-                    _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp)).group(0)
-                    if _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
+                    _re.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp)).group(0)
+                    if _re.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
                     else "a new ticket"
                 )
 
@@ -850,15 +847,14 @@ def agent_node(state: AgentState) -> AgentState:
             _has_tool = any(tc["name"] == "create_support_ticket" for tc in response.tool_calls)
             _has_ticket_in_history = False
             _ticket_id = "a new ticket"
-            import re as _re_tmp
             for m in state["messages"]:
                 if isinstance(m, ToolMessage) and m.name == "create_support_ticket":
                     _has_ticket_in_history = True
-                    match = _re_tmp.search(r"TKT-[0-9A-F]+", str(m.content))
+                    match = _re.search(r"TKT-[0-9A-F]+", str(m.content))
                     if match:
                         _ticket_id = match.group(0)
 
-            _has_tkt_in_response = _re_tmp.search(r"TKT-[0-9A-F]+", response.content or "")
+            _has_tkt_in_response = _re.search(r"TKT-[0-9A-F]+", response.content or "")
 
             if not _has_tool and not _has_tkt_in_response:
                 logger.warning("ABSOLUTE FINAL ENFORCER: Forcing overdue ticket response")
@@ -880,7 +876,7 @@ def agent_node(state: AgentState) -> AgentState:
                         message=last_msg.content if isinstance(last_msg, HumanMessage) else "Customer complaint requiring escalation",
                         customer_name=support_customer_name
                     )
-                    match = _re_tmp.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
+                    match = _re.search(r"TKT-[0-9A-Fa-f]+", str(ticket_resp))
                     _ticket_id = (
                         ticket_resp.get("ticket_id")
                         if isinstance(ticket_resp, dict)

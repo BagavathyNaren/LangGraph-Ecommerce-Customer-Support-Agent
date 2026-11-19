@@ -2,13 +2,45 @@
 .git
 .gitignore
 .dockerignore
-node_modules
+
+# Frontend (deployed separately via Firebase Hosting)
+frontend/
+node_modules/
+
+# Tests and dev tooling (not needed in production container)
+tests/
+tests_e2e/
+scratch/
+playwright-report/
+test-results/
+playwright.config.js
+locustfile.py
+
+# Documentation (not needed in production container)
+docs/
+README.md
+
+# Python artifacts
 __pycache__
 *.py[cod]
+*$py.class
+
+# Environment / secrets
 .env
 venv
 env
 env.yaml
+
+# IDE
 .vscode
 .idea
+
+# Evaluation results (generated at runtime)
 evaluation/results/
+
+# GHA credential files (must never be in production image)
+gha-creds-*.json
+
+# OS artifacts
+.DS_Store
+Thumbs.db
